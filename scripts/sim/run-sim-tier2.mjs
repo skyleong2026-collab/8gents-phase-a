@@ -21,6 +21,9 @@ import { HUNTING_GROUNDS, wavesForGround, applyRingLaw, ringLawMods } from '../.
 // hand-mirrored here (the old drift-bug class the waves.js extraction closed for wave-gen).
 import { UPGRADES, UPGRADE_BY_ID } from '../../src/data/upgrades.js';
 import { RELIC_BY_ID, cutsFor, cutEffect } from '../../src/data/relics.js';
+// ONE shared source for Team Recipe seasoning (R3) — the sim seasons the same way the game does
+// (same recipes.js apply fns), so they can't drift. Sim has no ★ Oaths, so only roster recipes fire.
+import { applySeasoning } from '../../src/data/recipes.js';
 
 const OUTER_RING = HUNTING_GROUNDS[0];
 const RINGS = HUNTING_GROUNDS;
@@ -116,6 +119,7 @@ async function runOne(squadIds, seed, policy, fixture = null, cm = 1, ground = O
   const waves = wavesForGround(ground, cm);
   const types = squadIds.map((id) => COMBAT_CREATURES[id].type);
   const runMods = freshMods();
+  applySeasoning(runMods, squadIds.map((id) => ({ id, type: COMBAT_CREATURES[id].type }))); // R3: a cooked recipe seasons the run (roster recipes only — no Oaths in the sim)
   if (fixture) fixture.apply(runMods); // §31 recut parity: a relic cut's mods, applied run-wide like a relic
   if (LAWS_ON) ringLawMods(ground, runMods); // ring law run-mods (e.g. Witherfen: healing halved)
   const lawCtx = { repeatIds: REPEAT_SQUAD ? new Set(squadIds) : new Set() }; // R8 "Cold Remembers" worst case

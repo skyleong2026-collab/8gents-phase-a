@@ -86,7 +86,10 @@ export function dealDamage(target, amount, actor) {
   // of the wound straight back — unconditional, unlike Riposte (which needs a shield to
   // counter from). Opt-in — thorns defaults 0 and only player relics set it, so no golden
   // ever reflects here. Like reflectBack, it can finish off the attacker; no re-trigger.
-  const th = target.mods?.thorns || 0;
+  // `thornsBonus` is an ADDITIVE rider (recipe seasoning — THE THORNWALL / IRON ARGUMENT)
+  // kept separate from `thorns` so it stacks on top of an innate's thorns instead of the
+  // OR-blend in playerDef clobbering it. Opt-in, defaults 0 → goldens untouched.
+  const th = (target.mods?.thorns || 0) + (target.mods?.thornsBonus || 0);
   if (th > 0 && remaining > 0 && actor && actor !== target && actor.alive) {
     const back = Math.round(remaining * th);
     if (back > 0) { actor.hp = Math.max(0, actor.hp - back); if (actor.hp === 0 && !phoenixSave(actor)) actor.alive = false; }

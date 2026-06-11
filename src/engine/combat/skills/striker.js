@@ -88,7 +88,7 @@ export const STRIKER_SKILLS = {
       if (!target) return { hits: [], chargeSpent: vented };
       const first = !state.firstActionDone;
       let mult = STRIKER.blitz.hitMult * Math.max(1, vented);
-      if (first) mult *= STRIKER.blitz.firstStrikeBonus;
+      if (first) mult *= STRIKER.blitz.firstStrikeBonus + (actor.mods?.blitzFirstBonus || 0); // blitzFirstBonus: THE FIRST POUNCE seasoning
       // "Blur" keystone: you always move first (engine initiative) and the opener bites deeper.
       if (first && actor.mods?.blur) mult *= 1.5;
       // "Blitz Storm" upgrade: Blitz becomes a 3-hit barrage instead of one heavy strike.

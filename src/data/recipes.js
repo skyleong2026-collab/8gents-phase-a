@@ -46,59 +46,59 @@ export const RECIPES = [
     slots: [{ t: 'Reactor' }, { t: 'Reactor' }],
     line: 'Light it twice, then blow on it.',
     how: 'Two Reactors: Burn stacks (Sputter adds one per stack) and Overload hits double on a burning target.',
-    season: { key: 'burn', label: 'Burn ticks +10%' } },
+    season: { label: 'Burn lands a deeper stack.', apply: (m) => { m.burnBonus = (m.burnBonus || 0) + 1; } } },
   { id: 'long_winter', name: 'THE LONG WINTER', icon: '❄️', tier: 'roster',
     slots: [{ t: 'Warden' }, { c: 'dartwing' }],
     line: 'First the cold, then the quiet.',
     how: 'A Warden freezes a target out of its turns; Dartwing\'s Killing Frost / shatter and finisher cash the opening in.',
-    season: { key: 'shatter', label: 'Shatter damage +10%' } },
+    season: { label: 'The cold lingers a beat longer.', apply: (m) => { m.freezeBonus = (m.freezeBonus || 0) + 1; } } },
   { id: 'patient_knife', name: 'THE PATIENT KNIFE', icon: '🗡️', tier: 'roster',
     slots: [{ t: 'Warden' }, { t: 'Assassin' }],
     line: 'Hold them still. The knife knows when.',
     how: 'A Warden\'s freeze pins a target under the 45% Execute line it can\'t heal past — the Assassin finishes.',
-    season: { key: 'executeLine', label: 'Execute window 45% → 48%' } },
+    season: { label: 'Execute reaches a little higher (45% → 48%).', apply: (m) => { m.executeWindow = (m.executeWindow || 0) + 0.03; } } },
   { id: 'thornwall', name: 'THE THORNWALL', icon: '🌵', tier: 'roster',
     slots: [{ c: 'ironwall' }, { t: 'Mender' }],
     line: 'Build the wall. Let them argue with it.',
     how: 'Ironwall\'s Spite Plating + base reflect; a Mender\'s overheal keeps the plates up. They break themselves on you.',
-    season: { key: 'thorns', label: 'Reflect / thorns return +10%' } },
+    season: { label: 'The thorns bite back a little harder (+5%).', apply: (m) => { m.thornsBonus = (m.thornsBonus || 0) + 0.05; } } },
   { id: 'stormcourt', name: 'THE STORMCOURT', icon: '⚡', tier: 'roster',
     slots: [{ t: 'Booster' }, { t: 'Striker' }],
     line: 'One voice, many knives.',
     how: 'A Booster\'s Amp multiplies EVERY hit — and a Striker\'s Flurry is eight of them.',
-    season: { key: 'flurry', label: 'Flurry +1 hit' } },
+    season: { label: 'One more knife in every flurry (+1 hit).', apply: (m) => { m.extraHits = (m.extraHits || 0) + 1; } } },
   { id: 'bellows', name: 'THE BELLOWS', icon: '🎐', tier: 'roster',
     slots: [{ oneOf: ['glowtail', 'tanglewing'] }, { any: true }],
     line: 'Keep the fire fed.',
     how: 'Charge-start innates + Wellspring/Channel charge-gifts pour fuel into one spender\'s bomb.',
-    season: { key: 'chargeStart', label: 'Squad starts +1 charge' } },
+    season: { label: 'The squad steps in with +1 charge already banked.', apply: (m) => { m.chargeStart = (m.chargeStart || 0) + 1; } } },
   { id: 'widowing', name: 'THE WIDOWING', icon: '🕸️', tier: 'roster',
     slots: [{ t: 'Hexer' }, { t: 'Reactor' }],
     line: 'Mark the tree, then drop it.',
     how: 'A Hexer stacks vulnerability (+15% per stack); one Overload lands all of it at once.',
-    season: { key: 'vulnDecay', label: 'Vulnerability lingers 1 round longer' } },
+    season: { label: 'Every curse bites a stack deeper.', apply: (m) => { m.vulnBonus = (m.vulnBonus || 0) + 1; } } },
   { id: 'first_pounce', name: 'THE FIRST POUNCE', icon: '🐾', tier: 'roster',
     slots: [{ c: 'swiftpaw' }, { c: 'dartwing' }],
     line: 'One opens, one closes.',
     how: 'Opener +25% on the unwounded, finisher +25% under half — the wound passes between them, both riding Blitz tempo.',
-    season: { key: 'blitzFirst', label: 'Blitz first-strike ×1.6 → ×1.75' } },
+    season: { label: 'The opening Blitz hits harder (×1.6 → ×1.75).', apply: (m) => { m.blitzFirstBonus = (m.blitzFirstBonus || 0) + 0.15; } } },
 
   // ── Sworn recipes (hour 15 — need the ★ Oaths) ──
   { id: 'slow_rot', name: 'THE SLOW ROT', icon: '☠️', tier: 'sworn',
     slots: [{ t: 'Assassin', oath: 'plague' }, { t: 'Hexer', oath: 'pandemic' }],
     line: 'Nothing here heals.',
     how: 'Shield-ignoring poison that never fades (★ Plague) under curses that rot the whole line (★ Pandemic).',
-    season: { key: 'poison', label: 'Poison damage +10%' } },
+    season: { label: 'The poison runs a dose deeper.', apply: (m) => { m.potent = true; } } },
   { id: 'unbroken_line', name: 'THE UNBROKEN LINE', icon: '🛡️', tier: 'sworn',
     slots: [{ t: 'Bulwark', oath: 'unbreakable' }, { t: 'Mender', oath: 'evergreen' }],
     line: 'It holds because it has to.',
     how: 'Allies can\'t drop below 1 HP while the wall stands (★ Unbreakable); the regen never expires (★ Evergreen).',
-    season: { key: 'regen', label: 'Regen +10%' } },
+    season: { label: 'Every mend leaves a lingering regen.', apply: (m) => { m.mendRegen = (m.mendRegen || 0) + 1; } } },
   { id: 'iron_argument', name: 'THE IRON ARGUMENT', icon: '⚙️', tier: 'sworn',
     slots: [{ t: 'Bulwark', oath: 'ironMaiden' }, { t: 'Booster' }],
     line: 'Hit it harder. Please.',
     how: 'Shielded allies reflect 100% of what they block (★ Iron Maiden) — and a Booster amps the wall.',
-    season: { key: 'reflectCap', label: 'Reflect cap +5%' } },
+    season: { label: 'The reflected blows bite a little harder (+5%).', apply: (m) => { m.thornsBonus = (m.thornsBonus || 0) + 0.05; } } },
 ];
 
 export const RECIPE_BY_ID = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
@@ -176,6 +176,26 @@ export function detectRecipes(members) {
     }
   }
   return { lit, near };
+}
+
+// THE ONE active seasoning (R3) — you field one squad, so one seasoning fires. When a squad
+// cooks several recipes, the FIRST in book order wins (RECIPES is authored hour-5 → hour-15, so
+// the more basic/attainable recipe is favoured — a deterministic, explainable pick). Returns the
+// recipe whose seasoning applies, or null. members: [{id, type, oath?}].
+export function activeRecipe(members) {
+  const { lit } = detectRecipes(members);
+  if (!lit.length) return null;
+  // RECIPES order is the priority; `lit` already follows it (detectRecipes iterates RECIPES).
+  return lit[0];
+}
+
+// Fold the active seasoning into a run-mod object `m` (mutates it). Game (perkBaseMods chain)
+// and sim call this with the SAME recipes.js, so they can't drift. No-op when nothing cooks.
+// Returns the recipe that seasoned (or null) so callers can surface it folk-honestly.
+export function applySeasoning(m, members) {
+  const r = activeRecipe(members);
+  if (r && r.season && typeof r.season.apply === 'function') r.season.apply(m);
+  return r;
 }
 
 // Which recipes could this creature belong to (by id, oneOf, or Type)? — for the character

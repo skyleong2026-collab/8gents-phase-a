@@ -22,7 +22,7 @@ import { endlessWaveSpec, endlessRoundSlag, endlessReached } from '../data/endle
 import { evalFeats, featTally, FEAT_GROUPS, TIER_COLOR } from '../data/feats.js';
 import { UPGRADES, UPGRADE_BY_ID } from '../data/upgrades.js';
 import { RELICS, RELIC_BY_ID, cutsFor, cutEffect } from '../data/relics.js';
-import { detectRecipes, memberFits, pullReveal, slotLabel, recipesForCreature, RECIPE_BY_ID, RECIPES } from '../data/recipes.js';
+import { detectRecipes, memberFits, pullReveal, slotLabel, recipesForCreature, RECIPE_BY_ID, RECIPES, applySeasoning } from '../data/recipes.js';
 import { GlossaryDot } from '../components/GlossaryPopover.jsx';
 import {
   createBattleState,
@@ -1463,8 +1463,14 @@ function playerDef(member, squadMods, perm) {
       burnBonus: (squadMods?.burnBonus ?? 0) + (p.burnBonus ?? 0),
       ampBonus:  (squadMods?.ampBonus  ?? 0) + (p.ampBonus  ?? 0),
       overloadMult: (p.overloadMult ?? 1), // tree-only for now
-      freezeBonus: (p.freezeBonus ?? 0),   // Warden tree — extends freezes
+      freezeBonus: (squadMods?.freezeBonus ?? 0) + (p.freezeBonus ?? 0),   // Warden tree + THE LONG WINTER seasoning
       nipFreeze:   p.nipFreeze || false,   // Warden tree — builder also freezes
+      // Recipe-seasoning riders (R3) — squad-wide, additive, opt-in. squadMods only carries
+      // these when the fielded squad cooks the matching recipe; goldens never set squadMods.
+      thornsBonus:     (squadMods?.thornsBonus ?? 0),     // THE THORNWALL / IRON ARGUMENT
+      vulnBonus:       (squadMods?.vulnBonus ?? 0),       // THE WIDOWING
+      blitzFirstBonus: (squadMods?.blitzFirstBonus ?? 0), // THE FIRST POUNCE
+      potent:          (squadMods?.potent || false) || p.potent || false, // THE SLOW ROT + venom tree
       // Reactor deep tree (vF-N):
       backdraftBurn:   (p.backdraftBurn ?? 0),
       chargeUpBonus:   (p.chargeUpBonus ?? 0),
@@ -1492,11 +1498,13 @@ function playerDef(member, squadMods, perm) {
       killCharge:     (squadMods?.killCharge ?? 0) + (p.killCharge ?? 0),     // upgrade — bank charge on a kill
       doomAll:        p.doomAll        || false, // Hexer tree — Doom curses the line
       jinxSpread:     p.jinxSpread     || false, // Hexer tree — Jinx curses a 2nd enemy
-      // per-creature bends (run-scoped) + permanent tree, combined:
-      extraHits:     (u.extraHits     ?? 0) + (p.extraHits     ?? 0),
-      executeWindow: (u.executeWindow ?? 0) + (p.executeWindow ?? 0),
+      // per-creature bends (run-scoped) + permanent tree, combined. extraHits/executeWindow/
+      // mendRegen also take a squad-wide contribution now — recipe seasoning (STORMCOURT /
+      // PATIENT KNIFE / UNBROKEN LINE) rides these channels; squadMods is 0 unless a recipe cooks.
+      extraHits:     (squadMods?.extraHits     ?? 0) + (u.extraHits     ?? 0) + (p.extraHits     ?? 0),
+      executeWindow: (squadMods?.executeWindow ?? 0) + (u.executeWindow ?? 0) + (p.executeWindow ?? 0),
       overloadBurn:  (u.overloadBurn  ?? 0) + (p.overloadBurn  ?? 0),
-      mendRegen:     (u.mendRegen     ?? 0) + (p.mendRegen     ?? 0),
+      mendRegen:     (squadMods?.mendRegen     ?? 0) + (u.mendRegen     ?? 0) + (p.mendRegen     ?? 0),
       braceTeam:     u.braceTeam   || p.braceTeam   || 0,
       primeTeam:     u.primeTeam   || p.primeTeam   || 0,
       overloadAOE:   u.overloadAOE || p.overloadAOE || false,
@@ -3347,6 +3355,7 @@ function RunMode({ narrow, slag = 0, onSlag }) {
     featsAtRunStartRef.current = doneFeatIds(); // remember what's already earned, to celebrate new ones
     setRunRepeat(repeatMult(clears[g.id] || 0)); // diminishing cores for re-farming a cleared ring
     const base = perkBaseMods(owned, reclaimed, relicKit, relicCut, temperingTier, holdfastPicks); // perks + Holdfast boons + equipped relics set the run's opening mods
+    applySeasoning(base, picked.map((id) => recipeMember(id, treeEquip))); // R3: a cooked Team Recipe seasons the run (one squad → one seasoning)
     ringLawMods(g, base); // the ring's LAW bends the run (e.g. Witherfen: healing halved)
     const sq = picked.map((id) => ({ id, hp: maxHpOf({ id }, base), unitMods: { ...EMPTY_UNIT_MODS }, bends: [] }));
     setSquad(sq); setRunMods(base); setTaken([]); setWaveIdx(0); setStats({ dmg: 0, biggest: 0, waves: 0 }); setEarned(0); setCoresRun({});
@@ -3358,6 +3367,7 @@ function RunMode({ narrow, slag = 0, onSlag }) {
     sfx.resume();
     featsAtRunStartRef.current = doneFeatIds();
     const base = perkBaseMods(owned, reclaimed, relicKit, relicCut, temperingTier, holdfastPicks);
+    applySeasoning(base, picked.map((id) => recipeMember(id, treeEquip))); // R3: seasoning (endless)
     const sq = picked.map((id) => ({ id, hp: maxHpOf({ id }, base), unitMods: { ...EMPTY_UNIT_MODS }, bends: [] }));
     const aDefs = sq.map((m) => playerDef(m, base, treeModsFor(m.id, treeEquip, treeRanks)));
     const apex = COMBAT_CREATURES[apexId];
@@ -3430,6 +3440,7 @@ function RunMode({ narrow, slag = 0, onSlag }) {
     if (picked.length < 2) return;
     sfx.resume();
     const base = perkBaseMods(owned, reclaimed, relicKit, relicCut, temperingTier, holdfastPicks); // same opening mods a climb would use
+    applySeasoning(base, picked.map((id) => recipeMember(id, treeEquip))); // R3: seasoning (challenge)
     const sq = picked.map((id) => ({ id, hp: maxHpOf({ id }, base), unitMods: { ...EMPTY_UNIT_MODS }, bends: [] }));
     setEndless(true); setEndlessResult(null);
     featsAtRunStartRef.current = doneFeatIds();
@@ -4108,6 +4119,9 @@ function RunMode({ narrow, slag = 0, onSlag }) {
                   }).filter(Boolean).slice(0, 2)
                 : [];
               if (!lit.length && !actionable.length) return null;
+              // One squad → ONE seasoning fires (first lit in book order). Only that recipe's
+              // chip names a live bonus — folk-honest: the others are real synergy, not a buff.
+              const seasonedId = lit.length ? lit[0].id : null;
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
                   {lit.map((r) => (
@@ -4117,6 +4131,7 @@ function RunMode({ narrow, slag = 0, onSlag }) {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: T.small, fontWeight: 900, color: '#ffd166', letterSpacing: 0.3 }}>🍳 {r.name}{r.tier === 'sworn' && <span style={{ fontSize: 9, color: '#cdb6ff', fontWeight: 800, marginLeft: 6 }}>★ sworn</span>}</div>
                         <div style={{ fontSize: T.micro, color: '#c9b98a', fontStyle: 'italic', marginTop: 1 }}>{r.line}</div>
+                        {r.id === seasonedId && r.season && <div style={{ fontSize: T.micro, fontWeight: 800, color: '#7ee0c0', marginTop: 2 }}>✦ {r.season.label}</div>}
                       </div>
                     </div>
                   ))}

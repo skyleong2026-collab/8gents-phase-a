@@ -31,7 +31,7 @@ export const HEXER_SKILLS = {
       actor.charge = Math.min(actor.maxCharge, actor.charge + gain);
       if (!target) return { hits: [], chargeGained: gain };
       const hit = dealDamage(target, actor.atk * HEXER.jinx.chipMult, actor);
-      const amt = HEXER.jinx.vuln + (actor.mods?.hexmaster ? 1 : 0); // "Hexmaster": deeper curses
+      const amt = HEXER.jinx.vuln + (actor.mods?.hexmaster ? 1 : 0) + (actor.mods?.vulnBonus || 0); // "Hexmaster": deeper curses · vulnBonus: THE WIDOWING seasoning
       const vulns = [curse(actor, target, amt)];
       // "Contagion" tree node: the curse also leaps to a second enemy. Opt-in.
       if (actor.mods?.jinxSpread && state) {
@@ -55,7 +55,7 @@ export const HEXER_SKILLS = {
       actor.charge = 0;
       if (!target) return { hits: [], chargeSpent: spent };
       const mult = HEXER.doom.base + HEXER.doom.perCharge * spent;
-      const amt = HEXER.doom.vuln + (actor.mods?.hexmaster ? 2 : 0); // "Hexmaster": heavier curse
+      const amt = HEXER.doom.vuln + (actor.mods?.hexmaster ? 2 : 0) + (actor.mods?.vulnBonus || 0); // "Hexmaster": heavier curse · vulnBonus: THE WIDOWING seasoning
       // "Spreading Hex" / "Hexmaster" / "Pandemic": Doom curses the WHOLE enemy line. Opt-in.
       const wide = actor.mods?.doomAll || actor.mods?.hexmaster || actor.mods?.pandemic;
       const cursed = (wide && state) ? enemiesOf(state, actor) : [target];
@@ -86,7 +86,7 @@ export const HEXER_SKILLS = {
       const vented = Math.floor(actor.charge / 2);
       actor.charge -= vented;
       const line = enemiesOf(state, actor);
-      const amt = HEXER.blight.vuln + (actor.mods?.hexmaster ? 1 : 0);
+      const amt = HEXER.blight.vuln + (actor.mods?.hexmaster ? 1 : 0) + (actor.mods?.vulnBonus || 0);
       const hits = line.map((e) => dealDamage(e, actor.atk * HEXER.blight.perCharge * vented, actor));
       const vulns = line.map((e) => curse(actor, e, amt));
       return { hits, chargeSpent: vented, vulns };
