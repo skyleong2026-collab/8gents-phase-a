@@ -753,6 +753,7 @@ function resolveShot(shooter,target,opts={}){
 }
 
 function doGrenade(shooter, tc, tr){
+  if(window.RWCamera && tileEls[tr] && tileEls[tr][tc]) RWCamera.center(tileEls[tr][tc], true);   // pan to the blast like a shot
   flashAttack(shooter);
   log('g', `${nm(shooter)} lobs a grenade at (${tc},${tr}).`); bark('h','Handler: Frag out — cover\'s coming down.','cal-grenade-a'); if(window.Snd) Snd.sfx('payoff-hit',0.7);
   for(let r=tr-1;r<=tr+1;r++)for(let c=tc-1;c<=tc+1;c++){ if(!inB(c,r)) continue;
@@ -1069,7 +1070,7 @@ function canShoot(u){ return u && !u.shotThisTurn && (u.actions>=1 || u.cls==='O
 function clearPath(){ movePathSet=new Set(); movePathEnd=''; }
 // Selecting a soldier defaults straight into MOVE (reachable tiles light up); you still hover to
 // preview the route and must Confirm. If it can't move (no actions / not your turn), fall back to idle.
-function selectUnit(u){ selected=u; pending=null; clearPath(); mode=(u&&u.side==='player'&&phase==='player'&&u.actions>0)?'move':'idle'; setPreview(''); render(); }
+function selectUnit(u){ selected=u; pending=null; clearPath(); mode=(u&&u.side==='player'&&phase==='player'&&u.actions>0)?'move':'idle'; setPreview(''); render(); if(window.RWCamera && u && occEls[u.id]) RWCamera.focus(occEls[u.id].o, true); }
 function setMode(m){ pending=null; clearPath(); mode = (mode===m)?'idle':m; setPreview(''); render(); }
 function onTileClick(c,r){
   if(phase!=='player') return;
@@ -1120,7 +1121,7 @@ function moveUnit(u,c,r){
   if(scatterWoken()) render();   // a pod we just revealed/approached scrambles for cover
   checkEnd();
 }
-function playerShoot(u,t){ resolveShot(u,t); u.shotThisTurn=true; u.actions=0; mode='idle'; setPreview(''); render(); checkEnd(); }
+function playerShoot(u,t){ if(window.RWCamera && occEls[t.id]) RWCamera.center(occEls[t.id].o, true); resolveShot(u,t); u.shotThisTurn=true; u.actions=0; mode='idle'; setPreview(''); render(); checkEnd(); }
 function playerGrenade(u,c,r){ doGrenade(u,c,r); u.shotThisTurn=true; u.actions=0; mode='idle'; setPreview(''); render(); checkEnd(); }
 function act_overwatch(u){ u.overwatch=true; u.actions=0; u.shotThisTurn=true; log('l',`${nm(u)} sets Overwatch.`); mode='idle'; render(); }
 function act_hunker(u){ u.hunkered=true; u.actions=0; log('l',`${nm(u)} hunkers down.`); mode='idle'; render(); }
@@ -1178,9 +1179,13 @@ function enemyTurn(){
   }
   const acting=living('enemy').filter(e=>e.awake);   // dormant pods don't act until spotted
   let i=0;
-  const step=()=>{ if(i>=acting.length){ phase='player'; resetForTurn('player'); render(); checkEnd(); return; }
+  const camTo=(e)=>{ if(window.RWCamera && visibleSet.has(e.c+','+e.r) && tileEls[e.r] && tileEls[e.r][e.c]) RWCamera.center(tileEls[e.r][e.c], true); };
+  const step=()=>{ if(i>=acting.length){ phase='player'; resetForTurn('player'); render();
+      if(window.RWCamera){ const p=living('player')[0]; if(p&&occEls[p.id]) RWCamera.center(occEls[p.id].o,true); }   // hand the view back to your squad
+      checkEnd(); return; }
     const e=acting[i++]; if(!e.alive){ step(); return; }
-    aiAct(e); render();
+    camTo(e);                 // pan to the enemy before it acts (if you can see it)
+    aiAct(e); render(); camTo(e);   // and again after, to follow its move/shot
     if(checkEnd()) return;
     setTimeout(step, 1100);   // pace enemies so each one's (now slower) move is readable, not a simultaneous blur
   };
@@ -1375,6 +1380,7 @@ window.DBG = {
     cs.ty = bh<=r.height ? (r.height-bh)/2 : Math.min(pad, Math.max(r.height-bh-pad, cs.ty)); }
   function apply(anim){ cam.style.transition=anim?'transform .22s ease-out':'none'; clamp(); cam.style.transform='translate('+cs.tx+'px,'+cs.ty+'px) scale('+cs.s+')'; }
   function center(el,anim){ if(!el) return; const r=vr(), e=el.getBoundingClientRect(); cs.tx+=(r.left+r.width/2)-(e.left+e.width/2); cs.ty+=(r.top+r.height/2)-(e.top+e.height/2); apply(anim); }
+  function focus(el,anim){ if(!el) return; const r=vr(), e=el.getBoundingClientRect(); if(e.left>r.left+24 && e.right<r.right-24 && e.top>r.top+24 && e.bottom<r.bottom-24) return; center(el,anim); }  // only pan if it's off-screen / near an edge
   function frameSquad(){ if(vr().width<10){ setTimeout(frameSquad,60); return; } cs.s=0.85; apply();
     const ps=[].slice.call(document.querySelectorAll('.occ.player')); if(!ps.length){ apply(); return; }
     const r=vr(); let x=0,y=0; ps.forEach(function(p){ const b=p.getBoundingClientRect(); x+=b.left+b.width/2; y+=b.top+b.height/2; }); x/=ps.length; y/=ps.length;
@@ -1401,7 +1407,7 @@ window.DBG = {
   vp.appendChild(ctl);
   ctl.children[0].onclick=function(){ zoomAtCenter(1.2); }; ctl.children[1].onclick=function(){ zoomAtCenter(1/1.2); }; ctl.children[2].onclick=function(){ frameSquad(); };
   const hint=document.createElement('div'); hint.className='camhint'; hint.textContent='scroll = zoom · drag or WASD = pan'; vp.appendChild(hint);
-  window.RWCamera={ frameSquad:frameSquad, center:center, cs:cs, apply:apply };
+  window.RWCamera={ frameSquad:frameSquad, center:center, focus:focus, cs:cs, apply:apply };
   // frame the squad whenever a battle builds; gently follow the selected soldier if it's off-screen
   if(typeof buildBoard==='function'){ const _bb=buildBoard; buildBoard=function(){ const r=_bb.apply(this,arguments); setTimeout(function(){ try{ frameSquad(); }catch(e){} },40); return r; }; }
   if(typeof selectUnit==='function'){ const _su=selectUnit; selectUnit=function(){ const r=_su.apply(this,arguments); requestAnimationFrame(function(){ try{ if(selected){ const o=document.getElementById('occ-'+selected.id); if(o){ const rr=vr(), er=o.getBoundingClientRect(); const inside=er.left>rr.left+14&&er.right<rr.right-14&&er.top>rr.top+14&&er.bottom<rr.bottom-14; if(!inside) center(o,true); } } }catch(e){} }); return r; }; }
