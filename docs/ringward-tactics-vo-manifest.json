@@ -1,0 +1,99 @@
+{
+  "_README": "Canonical VO contract for Ringward Tactics. The AUDIO INSTANCE renders every line below to public/<file> with the speaker's chosen voice. The GAME (ringward-tactics.html) plays these exact ids at the matching event. Do not rename ids or files without updating both sides.",
+  "settings": {
+    "endpoint": "POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+    "auth_header": "xi-api-key: <ELEVENLABS_API_KEY from scripts/audio/.env>",
+    "model_id": "eleven_multilingual_v2",
+    "output_format": "mp3_44100_128",
+    "voice_settings": { "stability": 0.35, "similarity_boost": 0.85, "style": 0.35, "use_speaker_boost": true },
+    "quality_note": "FEEDBACK: the first render sounded MECHANICAL/robotic. Fix: (1) pick an expressive, high-quality PREMADE voice (not a flat/utility one) for the Spotter; (2) lower stability (~0.3-0.4 → more natural prosody; high stability = monotone) and raise style (~0.3-0.4); (3) consider the eleven_turbo_v2_5 or v3 model if available. Re-render the narrator first and sanity-check before doing the whole set.",
+    "post": "normalize loudness ~ -16 LUFS, trim leading/trailing silence",
+    "note_0_voices": "GET /v1/voices returned 0 (empty library). Use ElevenLabs PREMADE voice ids, or add voices from the shared library first, then map one voice_id per speaker below."
+  },
+  "voices": {
+    "spotter": "weathered calm old male, Sam Elliott / Gus McCrae; dry, ominous undertone — narrator + tutorial + threat calls",
+    "handler": "DISTINCT voice (decided) — steadier/warmer than the Spotter; two-voice narration, spotter != handler",
+    "eli":   "laconic old marksman, slow & patient, dry",
+    "ruth":  "stoic female, blunt, heavy, few words",
+    "cal":   "nervy reckless male, gallows grin",
+    "mara":  "warm bone-tired female field medic",
+    "wren":  "cocky young male/androgynous scout",
+    "tom":   "weary warm older male, the morale"
+  },
+  "lines": [
+    { "id": "spotter-tut-01", "speaker": "spotter", "file": "audio/vo/spotter-tut-01.mp3", "text": "Six of us against whatever crossed the Rim tonight. Pick a trooper — click one, bottom-left." },
+    { "id": "spotter-tut-02", "speaker": "spotter", "file": "audio/vo/spotter-tut-02.mp3", "text": "Good. Two actions a turn, each one. Spend 'em like they're your last, 'cause out here they might be." },
+    { "id": "spotter-tut-03", "speaker": "spotter", "file": "audio/vo/spotter-tut-03.mp3", "text": "Lit tiles are where they can reach. Click one to move — then Confirm. No takin' it back once the boots move." },
+    { "id": "spotter-tut-04", "speaker": "spotter", "file": "audio/vo/spotter-tut-04.mp3", "text": "See those shields on the tile edges? Half cover knocks 'em off their aim. Full cover blocks the shot cold. Live behind it." },
+    { "id": "spotter-tut-05", "speaker": "spotter", "file": "audio/vo/spotter-tut-05.mp3", "text": "Hover a target — that number's your odds. Get 'round their cover for a flank: no defense, and it stings extra." },
+    { "id": "spotter-tut-06", "speaker": "spotter", "file": "audio/vo/spotter-tut-06.mp3", "text": "That's the dice. Frontier doesn't owe you the hit. Reset, find a cleaner angle." },
+    { "id": "spotter-tut-07", "speaker": "spotter", "file": "audio/vo/spotter-tut-07.mp3", "text": "Overwatch sets a trap — first thing that moves in your sights, you drop it. Good for holding a gap." },
+    { "id": "spotter-tut-08", "speaker": "spotter", "file": "audio/vo/spotter-tut-08.mp3", "text": "High ground's worth climbing — better aim, and it strips a level off their cover." },
+    { "id": "spotter-tut-09", "speaker": "spotter", "file": "audio/vo/spotter-tut-09.mp3", "text": "When you're spent, end the turn. Then it's their move. Watch the dark." },
+    { "id": "spotter-tut-10", "speaker": "spotter", "file": "audio/vo/spotter-tut-10.mp3", "text": "Job tonight's simple: every hostile that crossed, put it down. Simple ain't the same as easy." },
+    { "id": "spotter-tut-11", "speaker": "spotter", "file": "audio/vo/spotter-tut-11.mp3", "text": "They'll take hits. Sawbones can patch 'em mid-fight — keep her close, keep her alive." },
+    { "id": "spotter-tut-12", "speaker": "spotter", "file": "audio/vo/spotter-tut-12.mp3", "text": "That's the shape of it. The rest you'll learn the hard way. Everybody does." },
+
+    { "id": "spotter-contact-a", "speaker": "spotter", "file": "audio/vo/spotter-contact-a.mp3", "text": "Contact. They know we're here now." },
+    { "id": "spotter-contact-b", "speaker": "spotter", "file": "audio/vo/spotter-contact-b.mp3", "text": "Somethin' moved — pack's awake." },
+    { "id": "spotter-contact-c", "speaker": "spotter", "file": "audio/vo/spotter-contact-c.mp3", "text": "Eyes up. That's not the wind." },
+
+    { "id": "wren-move-a", "speaker": "wren", "file": "audio/vo/wren-move-a.mp3", "text": "On the wind." },
+    { "id": "ruth-move-a", "speaker": "ruth", "file": "audio/vo/ruth-move-a.mp3", "text": "Holding." },
+    { "id": "eli-move-a",  "speaker": "eli",  "file": "audio/vo/eli-move-a.mp3",  "text": "Findin' my angle." },
+
+    { "id": "eli-hit-a",  "speaker": "eli",  "file": "audio/vo/eli-hit-a.mp3",  "text": "Knew it'd drop." },
+    { "id": "cal-hit-a",  "speaker": "cal",  "file": "audio/vo/cal-hit-a.mp3",  "text": "Ha! Sit down." },
+    { "id": "ruth-hit-a", "speaker": "ruth", "file": "audio/vo/ruth-hit-a.mp3", "text": "Down." },
+
+    { "id": "spotter-miss-a", "speaker": "spotter", "file": "audio/vo/spotter-miss-a.mp3", "text": "Damn. Reset, find the angle." },
+    { "id": "eli-miss-a",     "speaker": "eli",     "file": "audio/vo/eli-miss-a.mp3",     "text": "...Wind." },
+    { "id": "cal-miss-a",     "speaker": "cal",     "file": "audio/vo/cal-miss-a.mp3",     "text": "Who built this thing crooked?" },
+
+    { "id": "eli-crit-a",     "speaker": "eli",     "file": "audio/vo/eli-crit-a.mp3",     "text": "That's the one." },
+    { "id": "cal-crit-a",     "speaker": "cal",     "file": "audio/vo/cal-crit-a.mp3",     "text": "Now THAT'S a hole." },
+    { "id": "spotter-crit-a", "speaker": "spotter", "file": "audio/vo/spotter-crit-a.mp3", "text": "Clean through. That's how." },
+
+    { "id": "spotter-kill-a", "speaker": "spotter", "file": "audio/vo/spotter-kill-a.mp3", "text": "That's one down." },
+    { "id": "tom-kill-a",     "speaker": "tom",     "file": "audio/vo/tom-kill-a.mp3",     "text": "One less crossin' tonight." },
+    { "id": "ruth-kill-a",    "speaker": "ruth",    "file": "audio/vo/ruth-kill-a.mp3",    "text": "Stay down." },
+
+    { "id": "cal-grenade-a", "speaker": "cal", "file": "audio/vo/cal-grenade-a.mp3", "text": "Frag out — cover's comin' down!" },
+    { "id": "cal-grenade-b", "speaker": "cal", "file": "audio/vo/cal-grenade-b.mp3", "text": "Fire in the hole, darlin'!" },
+
+    { "id": "mara-heal-a", "speaker": "mara", "file": "audio/vo/mara-heal-a.mp3", "text": "Stay with me — you're alright." },
+    { "id": "mara-heal-b", "speaker": "mara", "file": "audio/vo/mara-heal-b.mp3", "text": "Hold still, this'll sting worse'n the wound." },
+
+    { "id": "tom-rally-a", "speaker": "tom", "file": "audio/vo/tom-rally-a.mp3", "text": "On me! Move!" },
+    { "id": "tom-rally-b", "speaker": "tom", "file": "audio/vo/tom-rally-b.mp3", "text": "We don't break. Not tonight." },
+
+    { "id": "wren-mark-a",    "speaker": "wren",    "file": "audio/vo/wren-mark-a.mp3",    "text": "Lit 'em up — no cover, nowhere to fly." },
+    { "id": "spotter-mark-a", "speaker": "spotter", "file": "audio/vo/spotter-mark-a.mp3", "text": "Marked. Put it down." },
+
+    { "id": "ruth-hunker-a",    "speaker": "ruth", "file": "audio/vo/ruth-hunker-a.mp3",    "text": "Let 'em come." },
+    { "id": "eli-overwatch-a",  "speaker": "eli",  "file": "audio/vo/eli-overwatch-a.mp3",  "text": "I'll be watchin'." },
+
+    { "id": "mara-down-a",   "speaker": "mara",    "file": "audio/vo/mara-down-a.mp3",   "text": "No no no — somebody cover me!" },
+    { "id": "tom-down-a",    "speaker": "tom",     "file": "audio/vo/tom-down-a.mp3",    "text": "Hold the line — I've got their name." },
+    { "id": "spotter-hurt-a","speaker": "spotter", "file": "audio/vo/spotter-hurt-a.mp3","text": "We're hurt. Tighten up." },
+
+    { "id": "spotter-flank-a", "speaker": "spotter", "file": "audio/vo/spotter-flank-a.mp3", "text": "You're exposed — get to cover." },
+    { "id": "ruth-flank-a",    "speaker": "ruth",    "file": "audio/vo/ruth-flank-a.mp3",    "text": "Bad spot." },
+
+    { "id": "spotter-hunt-deploy", "speaker": "spotter", "file": "audio/vo/spotter-hunt-deploy.mp3", "text": "Hostiles came through the Rim. Advance careful — keep to cover, mind your flanks." },
+    { "id": "spotter-rite-deploy", "speaker": "spotter", "file": "audio/vo/spotter-rite-deploy.mp3", "text": "Somethin's chanting out past the rocks. Find the Caster and put it down before the rite finishes." },
+    { "id": "spotter-rite-break",  "speaker": "spotter", "file": "audio/vo/spotter-rite-break.mp3",  "text": "That's it — the chant's done. Now clean up." },
+    { "id": "spotter-rite-lose",   "speaker": "spotter", "file": "audio/vo/spotter-rite-lose.mp3",   "text": "Too late. It's through. Pull back!" },
+    { "id": "spotter-hold-deploy", "speaker": "spotter", "file": "audio/vo/spotter-hold-deploy.mp3", "text": "We just have to hold the cut till the relief comes. Dig in." },
+    { "id": "spotter-hold-win",    "speaker": "spotter", "file": "audio/vo/spotter-hold-win.mp3",    "text": "That's the relief horn — we held. Good work." },
+    { "id": "handler-cleared",     "speaker": "handler", "file": "audio/vo/handler-cleared.mp3",     "text": "All hostiles down. Clean work, team." },
+    { "id": "handler-wiped",       "speaker": "handler", "file": "audio/vo/handler-wiped.mp3",       "text": "Squad's gone... fall back." },
+
+    { "id": "spotter-promote-human", "speaker": "spotter", "file": "audio/vo/spotter-promote-human.mp3", "text": "Earned it. Good." },
+    { "id": "spotter-promote-graft", "speaker": "spotter", "file": "audio/vo/spotter-promote-graft.mp3", "text": "...you sure about carryin' that inside you?" },
+    { "id": "tom-fallen-a",          "speaker": "tom",     "file": "audio/vo/tom-fallen-a.mp3",          "text": "We'll set their stone on the ridge. Say the name." },
+    { "id": "spotter-fallen-a",      "speaker": "spotter", "file": "audio/vo/spotter-fallen-a.mp3",      "text": "Another one for the Cairn." },
+    { "id": "handler-return",        "speaker": "handler", "file": "audio/vo/handler-return.mp3",        "text": "Back to the line. Patch up, decide what we build." },
+    { "id": "spotter-drop-ambient",  "speaker": "spotter", "file": "audio/vo/spotter-drop-ambient.mp3",  "text": "Ground's wrong here. Don't drink the water, don't listen too long." }
+  ]
+}

@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Barlow:wght@400;500;600;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<title>Ringward Tactics — the Rim</title>
+<style>
+
+  :root {
+    --tile: 64px;
+    /* ─── Direction B · "Wanted Poster" — warm timber & lamplight ─── */
+    --bg-deep:#161109; --bg-board:#0f0b06; --bg-panel:#1f1810; --bg-raise:#292014; --bg-sunk:#120d07;
+    --line:#4a3d28; --line-2:#5d4d31; --line-soft:#322a1b;
+    --ink:#e8dcc4; --dim:#a0937a; --faint:#75663f;
+    --ember:#e08a3a; --ember-deep:#2c1d0e; --amber:#e0b257;
+    --violet:#9a6ad0; --violet-deep:#251636;
+    --steel:#7ec4e0; --steel-soft:#9fc4e8;
+    --crit:#f0c84a;
+    --cover-half:#e0b257; --cover-full:#bcd6ee;
+    --font-head:'Zilla Slab',Georgia,serif;
+    --font-body:'Barlow',system-ui,sans-serif;
+    --font-mono:'Courier Prime',ui-monospace,monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    overflow-x: hidden;
+    background:
+      radial-gradient(120% 70% at 50% -8%, #2a1d0e 0%, rgba(42,29,14,0) 52%),
+      radial-gradient(100% 120% at 50% 122%, #1c130a 0%, rgba(28,19,10,0) 60%),
+      var(--bg-deep);
+    background-attachment: fixed;
+    color: var(--ink); font-family: var(--font-body); margin:0; padding:22px;
+    display:flex; flex-direction:column; align-items:center; gap:14px; -webkit-font-smoothing:antialiased;
+  }
+  h1 { font-family: var(--font-head); font-size:25px; font-weight:700; letter-spacing:.4px; color: var(--ink);
+       margin:0; padding-bottom:7px; border-bottom:2px solid var(--line); text-shadow:0 1px 2px #000; text-align:center; }
+  h1::first-letter { color: var(--amber); }
+  .sub { font-size:12px; color: var(--dim); margin-top:-4px; letter-spacing:.2px; text-align:center; max-width:760px; }
+  .wrap { display: flex; gap: 20px; align-items: flex-start; }
+  #board { position: relative; width: calc(var(--tile)*16); height: calc(var(--tile)*11); background: var(--bg-board);
+           border: 1px solid var(--line); box-shadow: inset 0 0 80px #00000099, 0 6px 26px #00000080; }
+  /* battlefield camera viewport: a fixed window into the larger board (pan/zoom inside it) */
+  #boardvp { position: relative; overflow: hidden; width: calc(var(--tile)*12); height: calc(var(--tile)*8.6);
+             background: #0a0703; border: 1px solid var(--line); border-radius: 4px; box-shadow: inset 0 0 60px #000000aa, 0 6px 26px #00000080; cursor: grab; }
+  #boardcam { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+  #boardcam #board { border: none; box-shadow: none; }
+  #boardcam #board.tilt { margin: 0; }
+  .camctl { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 4px; z-index: 30; }
+  .camctl button { width: 27px; height: 27px; border: 1px solid var(--line); background: #1b140bdd; color: #e8d9bf;
+                   border-radius: 5px; font-size: 15px; line-height: 1; cursor: pointer; font-family: var(--font-head); }
+  .camctl button:hover { background: #2c2113; color: #fff; }
+  .camhint { position: absolute; left: 8px; bottom: 6px; z-index: 30; font-size: 10px; color: #8a7a60; pointer-events: none; }
+  .tile { position: absolute; width: var(--tile); height: var(--tile); border: 1px solid #20180e; background-size: 100% 100%; image-rendering: pixelated; }
+  /* preview scenery: cover props / buildings / blight that stand on tiles like units */
+  .scenery { position: absolute; width: var(--tile); height: var(--tile); pointer-events: none; z-index: 4; display: flex; align-items: flex-end; justify-content: center; }
+  .scenery img { image-rendering: pixelated; width: auto; height: var(--tile); max-width: 150%; filter: drop-shadow(0 4px 3px #0007); }
+  .scenery.decal img { width: var(--tile); height: var(--tile); opacity: .92; filter: none; }
+  #board.tilt .scenery { transform: rotateZ(calc(-1 * var(--rot))) rotateX(-56deg); transform-origin: 50% 98%; }
+  #board.tilt .scenery.decal { transform: none; }
+  #board:not(.tilt) .scenery { transform: rotateZ(calc(-1 * var(--rot))); }
+  .tile.p-zone { background: #1d160c; } .tile.e-zone { background: #1f121a; } .tile.mid { background: #140e07; }
+  .tile.reachable { cursor: pointer; box-shadow: inset 0 0 0 2px #6fbcd655; }
+  .tile.reachable:hover { box-shadow: inset 0 0 0 2px #9fd6f0; background-color: #16283a; }
+  .tile.target { cursor: crosshair; box-shadow: inset 0 0 0 2px #ff6a6a99; }
+  .tile.target:hover { box-shadow: inset 0 0 0 2px #ff9a9a; }
+  .tile.gtarget { cursor: crosshair; box-shadow: inset 0 0 0 2px #ffd34a88; }
+  .tile.aoe { background-color: #3a2a0e; }
+  .tile.atarget { cursor: pointer; box-shadow: inset 0 0 0 2px #6dff9b99; }
+  .tile.atarget:hover { box-shadow: inset 0 0 0 2px #9bffb0; }
+  /* elevation (2.5D high ground) */
+  .tile.raised { box-shadow: inset 0 0 0 1px #6a542e66; background-color: #241a0c; }
+  .tile.high { box-shadow: inset 0 0 0 2px #9a7a3a88; background-color: #2c2010; }
+  .tile.raised::after, .tile.high::after { position:absolute; bottom:1px; right:2px; font-size:8px; line-height:1; pointer-events:none; }
+  .tile.raised::after { content:'▲'; color:#c0a060; } .tile.high::after { content:'▲▲'; color:#ffd9a0; }
+  /* flyer lift + marked target */
+  .occ.fly img { filter: drop-shadow(0 9px 6px #0006); }
+  .occ.enemy.fly img { transform: scaleX(-1) translateY(-7px); }
+  .markpin { position:absolute; top:-2px; right:5px; color:#ff5a5a; font-size:13px; z-index:8; text-shadow:0 0 3px #000; pointer-events:none; }
+  /* class color-coding (placeholder readability) */
+  .occ .glyph { position:absolute; top:-1px; left:3px; font-size:13px; font-weight:700; z-index:7; text-shadow:0 0 3px #000,0 0 2px #000; pointer-events:none; }
+  .occ .base { position:absolute; bottom:6px; left:50%; transform:translateX(-50%); width:42px; height:11px; border-radius:50%; opacity:.6; filter:blur(1.5px); z-index:2; pointer-events:none; }
+  /* fog of war */
+  .tile.fog { background:#070402 !important; box-shadow: inset 0 0 0 1px #0c0805 !important; }
+  .tile.fog .cv { display:none; }
+  .tile.fog::after { display:none !important; }
+  .tile.dim { filter: brightness(.5); }
+  /* cover shields on edges */
+  .cv { position: absolute; font-size: 10px; line-height: 1; z-index: 3; pointer-events: none; text-shadow: 0 0 2px #000; }
+  .cv.half { color: var(--cover-half); } .cv.full { color: var(--cover-full); }
+  .cv.N { top: 1px; left: 50%; transform: translateX(-50%); }
+  .cv.S { bottom: 1px; left: 50%; transform: translateX(-50%); }
+  .cv.E { right: 1px; top: 50%; transform: translateY(-50%); }
+  .cv.W { left: 1px; top: 50%; transform: translateY(-50%); }
+  /* wall segments (full cover edges) — worn iron/timber */
+  .wall { position: absolute; background: #8a7148; z-index: 2; pointer-events: none; box-shadow: 0 0 4px #000, inset 0 0 0 1px #00000050; }
+  /* occupants */
+  .occ { position: absolute; width: var(--tile); height: var(--tile); transition: left .2s, top .2s; z-index: 5; pointer-events: none; display: flex; align-items: center; justify-content: center; }
+  .occ img { width: 116%; height: 116%; image-rendering: pixelated; object-fit: contain; filter: drop-shadow(0 3px 4px #000b); }
+  .occ.enemy img { transform: scaleX(-1); }
+  /* movement path preview */
+  .tile.path { box-shadow: inset 0 0 0 2px #7ecfff88; background-color: #15263a; }
+  .tile.pathend { box-shadow: inset 0 0 0 2px #9fd0ff; background-color: #1d3349; }
+  .tile.path::before { content:''; position:absolute; top:50%; left:50%; width:7px; height:7px; margin:-3.5px; border-radius:50%; background:#9fd0ff; opacity:.8; }
+  @keyframes rwt-march { to { stroke-dashoffset:-11; } }
+  #pathsvg .march { animation: rwt-march .55s linear infinite; }
+  .occ.dormant img, .occ.dormant .base { filter: saturate(.4) brightness(.82); }
+  .occ.dormant::after { content:'💤'; position:absolute; top:-7px; right:1px; font-size:11px; opacity:.85; pointer-events:none; }
+  /* 2.5D tilt view — UNCHANGED geometry */
+  #board { transition: transform .45s ease; --rot: 0deg; }
+  #board.tilt { transform: perspective(1300px) rotateX(56deg) rotateZ(var(--rot)); transform-origin: 50% 44%; transform-style: preserve-3d; margin: 60px 0 150px; }
+  #board.tilt .occ { transform: rotateZ(calc(-1 * var(--rot))) rotateX(-56deg); transform-origin: 50% 98%; }
+  #board.tilt .occ .base { opacity:.32; }
+  #board:not(.tilt) { transform: rotateZ(var(--rot)); transform-origin: 50% 50%; }
+  #board:not(.tilt) .occ { transform: rotateZ(calc(-1 * var(--rot))); }
+  #board:not(.tilt) .occ.enemy img { transform: scaleX(-1); }
+  .occ.sel::after { content:''; position:absolute; inset: 6px; border-radius: 6px; box-shadow: 0 0 0 2px #7ecfff, 0 0 12px #7ecfff88; }
+  .occ.ow::before { content:'◔'; position:absolute; top:0; left:4px; color:#ffd34a; font-size:13px; z-index:7; text-shadow:0 0 3px #000; }
+  .occ.hunk::before { content:'▲'; position:absolute; top:0; left:4px; color:#9fd0ff; font-size:11px; z-index:7; text-shadow:0 0 3px #000; }
+  .occ.hit { animation: shake .3s; }
+  @keyframes shake { 0%,100%{margin-left:0} 25%{margin-left:-5px} 75%{margin-left:5px} }
+  .hpbar { position: absolute; top: 1px; left: 14%; width: 72%; height: 5px; background: #000b; border: 1px solid #0008; z-index: 6; }
+  .hpbar > i { display:block; height:100%; background: linear-gradient(#6dff9b,#2fae5f); transition: width .2s; }
+  .enemy .hpbar > i { background: linear-gradient(#ff7ad2,#b12f8f); }
+  .pips { position:absolute; bottom:2px; left:50%; transform:translateX(-50%); display:flex; gap:3px; z-index:6; }
+  .pips i { width:6px; height:6px; border-radius:50%; background:#463a22; box-shadow:0 0 2px #000; }
+  .pips i.on { background:#7ec4e0; }
+  /* panel */
+  .panel { width: 300px; display:flex; flex-direction:column; gap:10px; }
+  .banner { font-family:var(--font-head); font-size:16px; letter-spacing:1.5px; text-transform:uppercase; padding:9px; text-align:center; border-radius:6px; display:none; font-weight:700; }
+  .banner.win { display:block; background:#14250f; color:#bfe8a0; border:1px solid #3a5a24; } .banner.lose { display:block; background:#2a1016; color:#ff9ab0; border:1px solid #6a2838; }
+  .sel-card { background:var(--bg-panel); border:1px solid var(--line); border-left:3px solid var(--steel); border-radius:6px; padding:9px 11px; font-size:12.5px; min-height:54px; }
+  .sel-card .nm { font-family:var(--font-head); color:#fff; font-weight:700; letter-spacing:.4px; font-size:15px; } .sel-card .cls { color:var(--steel); }
+  .sel-card .meta { color:var(--dim); font-size:11.5px; margin-top:3px; line-height:1.5; }
+  .preview { background:var(--bg-sunk); border:1px solid var(--line); border-radius:6px; padding:9px 11px; font-size:12.5px; min-height:40px; color:var(--ink); }
+  .preview .big { font-family:var(--font-head); font-size:20px; font-weight:700; color:#fff; } .preview .flank { color:var(--crit); font-weight:700; } .preview .cov { color:var(--cover-full); }
+  .acts { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  button.act { background:var(--bg-raise); border:1px solid var(--line); color:var(--ink); padding:8px; border-radius:5px; cursor:pointer; font-family:var(--font-body); font-size:12.5px; font-weight:500; transition:background .12s,border-color .12s; }
+  button.act:hover:not(:disabled) { background:#33280f; border-color:var(--line-2); }
+  button.act:disabled { opacity:.32; cursor:default; }
+  button.act.on { background:var(--ember-deep); border-color:var(--ember); color:#f3cda0; }
+  button.act.end { grid-column:1/3; background:var(--violet-deep); border-color:#6a4a8e; color:#d8c0f0; font-weight:600; }
+  button.act.restart { grid-column:1/3; }
+  #log { height:170px; overflow-y:auto; background:var(--bg-sunk); border:1px solid var(--line-soft); border-radius:6px; padding:9px 10px; font-family:var(--font-mono); font-size:11.5px; line-height:1.55; display:flex; flex-direction:column-reverse; }
+  #log .l{color:#bdb091} #log .h{color:#f0ad60} #log .g{color:#9fd6f0} #log .b{color:#ff9ab0} #log .c{color:var(--crit);font-weight:700}
+  .legend { font-family:var(--font-mono); font-size:10.5px; color:var(--faint); margin-top:6px; }
+  .turnflag { font-size:11.5px; color:var(--dim); } .turnflag b{color:#bfe8a0}
+  .diffrow { display:flex; gap:7px; align-items:center; font-family:var(--font-mono); font-size:11px; color:var(--dim); flex-wrap:wrap; }
+  .diffrow button { background:var(--bg-raise); border:1px solid var(--line); color:var(--ink); padding:4px 11px; border-radius:5px; cursor:pointer; font-family:var(--font-mono); font-size:11px; }
+  .diffrow button.on { background:var(--ember-deep); border-color:var(--ember); color:#f3cda0; }
+  .diffrow input { width:60px; background:var(--bg-sunk); border:1px solid var(--line); color:var(--ink); padding:3px 6px; border-radius:4px; font-family:var(--font-mono); }
+  /* floating combat text */
+  .floater { position:absolute; z-index:20; font-weight:700; font-size:18px; pointer-events:none; text-shadow:0 0 4px #000,0 0 4px #000; animation: floatup 1s ease-out forwards; }
+  .floater.miss { color:#cbb89a; } .floater.hit { color:#ff8a8a; } .floater.crit { color:var(--crit); font-size:23px; }
+  .floater.heal { color:#6dff9b; } .floater.rally { color:var(--amber); font-size:15px; }
+  @keyframes floatup { 0%{ transform:translate(-50%,4px); opacity:0; } 18%{opacity:1;} 100%{ transform:translate(-50%,-38px); opacity:0; } }
+  /* tracer — warm gunfire */
+  .tracer { position:absolute; height:2px; z-index:19; transform-origin:left center; pointer-events:none; animation: tracerfade .32s ease-out forwards; }
+  .tracer.hit { background:linear-gradient(90deg,#ffb060,#fff); box-shadow:0 0 6px #ffb060; }
+  .tracer.miss { background:linear-gradient(90deg,#6a6048,#bcae90); }
+  @keyframes tracerfade { 0%{opacity:0;} 25%{opacity:1;} 100%{opacity:0;} }
+  /* target visibility (shoot mode) */
+  .occ.targetable::after { content:''; position:absolute; inset:4px; border-radius:50%; box-shadow:0 0 0 2px #ff5a5a, 0 0 10px #ff5a5a99; animation: pulse 1s infinite alternate; }
+  @keyframes pulse { from{opacity:.6} to{opacity:1} }
+  .occ.untargetable img { opacity:.45; filter:grayscale(.85) brightness(.7) !important; }
+  .occ.pendingtgt::after { content:''; position:absolute; inset:2px; border-radius:50%; box-shadow:0 0 0 3px #ff2a2a, 0 0 14px #ff2a2a; }
+  .badge { position:absolute; top:-13px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:700; padding:1px 5px; border-radius:3px; z-index:8; white-space:nowrap; }
+  .badge.can { background:#3a1416; color:#ff9a9a; box-shadow:0 0 4px #000; }
+  .badge.cant { background:#241a0e; color:#a0937a; }
+  .tile.pmove { box-shadow: inset 0 0 0 3px #9bffb0 !important; background-color:#143a24 !important; }
+  /* confirm bar */
+  .confirm { background:var(--bg-panel); border:1px solid var(--line-2); border-radius:6px; padding:9px 11px; display:flex; flex-direction:column; gap:7px; }
+  .confirm .q { font-size:12.5px; color:var(--ink); line-height:1.45; } .confirm .q b{color:#fff;}
+  .confirm .row { display:flex; gap:6px; }
+  .confirm button { flex:1; padding:9px; border-radius:5px; font-family:var(--font-body); font-size:12.5px; cursor:pointer; font-weight:700; }
+  .confirm .go { background:#1f5a3a; border:1px solid #3fae6f; color:#cfffe0; }
+  .confirm .go:hover { background:#27734a; }
+  .confirm .no { background:#3a1a1a; border:1px solid #8a4a4a; color:#ffcccc; }
+  .confirm .no:hover { background:#4a2323; }
+  /* promotion / skill-tree pick */
+  .promote { background:#241a0c; border:1px solid #6a541e; border-radius:6px; padding:9px 11px; display:flex; flex-direction:column; gap:7px; }
+  .promote .ptitle { font-family:var(--font-head); font-size:13px; color:var(--amber); font-weight:700; }
+  .promote .popt { text-align:left; background:#2a2010; border:1px solid #4a3e1e; color:var(--ink); padding:8px 10px; border-radius:5px; cursor:pointer; font-family:var(--font-body); font-size:12.5px; }
+  .promote .popt:hover { background:#352910; border-color:#9a8a4a; }
+  .promote .popt.graft { border-color:#6a3a72; }
+  .promote .popt.graft:hover { background:#2a1630; }
+  .promote .popt b { color:#fff; } .promote .popt .pd { color:var(--dim); font-size:11px; } .promote .popt .tg { color:var(--violet); font-size:10px; font-weight:700; }
+  /* ── Frontier / debrief meta screen ── */
+  .meta { width: calc(var(--tile)*12 + 320px); max-width:95vw; background:linear-gradient(180deg,#1b140b,#150f08); border:1px solid var(--line); border-radius:10px; padding:20px 24px; display:flex; flex-direction:column; gap:14px; box-shadow: 0 10px 44px #00000080, inset 0 1px 0 #ffffff08; }
+  .meta h2 { font-family:var(--font-head); font-size:22px; letter-spacing:.4px; color:var(--ink); margin:0; font-weight:700; }
+  .meta .ftag { font-size:12.5px; color:var(--dim); }
+  .meta .res { font-size:13.5px; color:var(--amber); } .meta .res b{ color:#fff; }
+  .mcols { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; }
+  .mcol { flex:1; min-width:280px; display:flex; flex-direction:column; gap:8px; }
+  .mcard { background:var(--bg-panel); border:1px solid var(--line); border-radius:6px; padding:9px 11px; font-size:12.5px; color:var(--ink); }
+  .mcard .nmln { font-family:var(--font-head); color:#fff; font-weight:700; font-size:13.5px; } .mcard .nk { color:var(--amber); } .mcard .sub2 { color:var(--dim); font-size:11.5px; margin-top:2px; }
+  .mcard.dead { opacity:.45; }
+  .bar2 { height:5px; background:#000a; border-radius:3px; overflow:hidden; margin-top:4px; }
+  .bar2 > i { display:block; height:100%; }
+  .bldg { display:flex; justify-content:space-between; align-items:center; gap:8px; background:var(--bg-panel); border:1px solid var(--line); border-radius:6px; padding:8px 11px; font-size:12.5px; }
+  .bldg .tiers { color:var(--amber); letter-spacing:2px; }
+  .mbtn { background:var(--bg-raise); border:1px solid var(--line-2); color:var(--ink); padding:7px 12px; border-radius:5px; cursor:pointer; font-family:var(--font-body); font-size:12.5px; font-weight:500; }
+  .mbtn:hover:not(:disabled){ background:#33280f; border-color:#9a8a4a; }
+  .mbtn:disabled{ opacity:.32; cursor:default; }
+  .mbtn.go { background:#1f5a3a; border-color:#3fae6f; color:#cfffe0; font-weight:700; font-size:13.5px; padding:10px; }
+  .mbtn.go:hover{ background:#27734a; }
+  .mbtn.graft { border-color:#6a3a72; color:#d8b8f0; }
+  .mbtn.danger { border-color:#7a3a3a; color:#ffb0b0; }
+  .deci { display:flex; flex-direction:column; gap:8px; }
+  .deci .dopt { text-align:left; background:var(--bg-panel); border:1px solid var(--line); color:var(--ink); padding:11px 13px; border-radius:6px; cursor:pointer; font-family:var(--font-body); font-size:12.5px; transition:background .12s,border-color .12s; }
+  .deci .dopt:hover { background:#2e2410; border-color:var(--amber); }
+  .deci .dopt b{ color:#fff; font-family:var(--font-head); font-weight:700; }
+  .cairn { font-family:var(--font-mono); font-size:11.5px; color:var(--faint); border-top:1px solid var(--line-soft); padding-top:9px; }
+  .togrow { display:flex; gap:10px; align-items:center; font-size:11.5px; color:var(--dim); }
+
+</style>
+</head>
+<body>
+<h1>Ringward Tactics — Holding the Rim</h1>
+<div class="sub">Frontier company vs the things crossing the Drop · 2 actions/soldier · select a trooper → Move / Shoot / Overwatch / Hunker / Grenade / Heal / Rally</div>
+<div class="diffrow" id="diffrow"></div>
+
+<div id="meta" class="meta" style="display:none"></div>
+
+<div class="wrap" id="wrap">
+  <div>
+    <div id="boardvp"><div id="boardcam"><div id="board"></div></div></div>
+    <div class="legend">Shields: <span style="color:#e0b257">▢ half (−20)</span> · <span style="color:#bcd6ee">▣ full (−40, blocks sight)</span> · flank = get around cover → no defense + crit</div>
+  </div>
+  <div class="panel">
+    <div id="banner" class="banner"></div>
+    <div class="turnflag" id="turnflag"></div>
+    <div class="sel-card" id="selcard">No unit selected.</div>
+    <div class="preview" id="preview">Hover a target to see the odds.</div>
+    <div class="confirm" id="confirm" style="display:none"></div>
+    <div class="promote" id="promote" style="display:none"></div>
+    <div class="acts" id="acts"></div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+// ───────── tuning ─────────
+const TUNING = {
+  COVER: {0:0, 1:20, 2:40},
+  COVER_HUNKER: {0:0, 1:40, 2:60},
+  SNAPSHOT_PENALTY: 15,   // sniper, if it moved
+  OVERWATCH_PENALTY: 15,
+  CRIT_MULT: 1.5,
+  FLANK_CRIT: 25,
+  HIT_FLOOR: 5, HIT_CEIL: 95,
+  BONUS_PER: 4, BONUS_CAP: 20, BONUS_CLOSE: 8,   // long-gun: reward range, PUNISH being close
+  HIGH_GROUND_AIM: 15,   // +aim when shooting from higher elevation (also strips 1 cover level)
+  WAKE_DIST: 3,          // a dormant pack wakes when a soldier closes within this many tiles (the "they notice you" range)
+  AI: { coverW: 25, flankBonus: 20, stepCost: 2, selfFlankPenalty: 15, shootThresh: 45, openThresh: 50 },
+};
+// difficulty presets — scale enemy aim + AI aggression (lower thresholds = shoots/repositions more readily)
+const DIFFICULTY = {
+  Recruit:   { aimMod:-12, ai:{ shootThresh:55, openThresh:62, flankBonus:8,  coverW:30, stepCost:3, selfFlankPenalty:20 } },
+  Veteran:   { aimMod:0,   ai:{ shootThresh:45, openThresh:50, flankBonus:20, coverW:25, stepCost:2, selfFlankPenalty:15 } },
+  Commander: { aimMod:8,   ai:{ shootThresh:35, openThresh:42, flankBonus:35, coverW:18, stepCost:1, selfFlankPenalty:8 } },
+};
+let difficulty='Veteran';
+function applyDifficulty(){ Object.assign(TUNING.AI, DIFFICULTY[difficulty].ai); }
+function setDifficulty(name){ difficulty=name; newGame(); }
+const COLS = 16, ROWS = 11, T = 64;
+
+// ───────── rng (Mulberry32, from src/engine/rng.js) ─────────
+function createRng(seed){ let s=(seed>>>0)||1; return function(){ s+=0x6d2b79f5; let t=s; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
+let SEED = 1337, rng = createRng(SEED);
+
+// ───────── helpers ─────────
+const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const cheb=(a,b)=>Math.max(Math.abs(a.c-b.c),Math.abs(a.r-b.r));
+const manh=(a,b)=>Math.abs(a.c-b.c)+Math.abs(a.r-b.r);
+const inB=(c,r)=>c>=0&&c<COLS&&r>=0&&r<ROWS;
+const sign=x=>x<0?-1:x>0?1:0;
+
+// ───────── grid + cover ─────────
+let grid;
+function blankGrid(){
+  grid=[];
+  for(let r=0;r<ROWS;r++){ grid[r]=[]; for(let c=0;c<COLS;c++) grid[r][c]={c,r,elevation:0,cover:{N:0,E:0,S:0,W:0},destructible:{N:false,E:false,S:false,W:false}}; }
+}
+function setElev(c,r,lvl){ grid[r][c].elevation=lvl; }
+// effective elevation of a unit: flyers count as high (2)
+function elevOf(u){ return u.flying?2:(grid[u.r][u.c].elevation||0); }
+function setCover(c,r,side,level,destructible){ const t=grid[r][c]; t.cover[side]=level; t.destructible[side]=!!destructible; }
+function layout(){
+  blankGrid();
+  // full walls (indestructible, block sight)
+  setCover(5,2,'E',2,false); setCover(5,2,'S',2,false);
+  setCover(6,5,'N',2,false); setCover(6,5,'W',2,false);
+  // full destructible crates (block sight, clearable)
+  setCover(4,4,'E',2,true);
+  setCover(8,3,'W',2,true);
+  // half cover (destructible, do not block sight)
+  setCover(3,5,'N',1,true);
+  setCover(4,6,'N',1,true); setCover(4,6,'E',1,true);
+  setCover(7,2,'S',1,true); setCover(7,2,'W',1,true);
+  setCover(8,4,'S',1,true);
+  setCover(6,3,'N',1,true); setCover(6,3,'S',1,true);
+  setCover(9,5,'W',1,true);
+  setCover(2,6,'E',1,true);
+  // elevation: contested high ground (towers/ledges) the Sharpshooter wants
+  setElev(5,3,2); setElev(6,3,1);              // central rise
+  setElev(8,2,2); setElev(7,2,1);              // enemy-side ledge
+  setElev(3,4,2); setElev(4,4,1);              // player-side ledge
+  setElev(6,6,1); setElev(9,4,1);
+  // ── extended battlefield for the larger grid: a second contested rise + cover spread toward the enemy side ──
+  setElev(11,5,2); setElev(10,5,1); setElev(12,5,1);     // mid-right rise
+  setElev(13,7,1); setElev(9,8,1);
+  setCover(11,6,'N',2,false); setCover(11,6,'W',1,true);
+  setCover(12,4,'S',1,true);   setCover(13,5,'W',2,true);
+  setCover(10,7,'E',1,true);   setCover(9,6,'S',1,true);
+  setCover(12,8,'N',1,true);   setCover(8,7,'E',1,true);
+  setCover(14,4,'S',2,false);  setCover(7,8,'W',1,true);
+  setCover(5,8,'N',1,true);    setCover(3,7,'E',1,true);  // cover along the player's longer approach
+  rebuildWalls();
+}
+// wall set = full-cover edges (block LOS + movement)
+let wallSet;
+function edgeKey(c1,r1,c2,r2){ return (c1<c2||(c1===c2&&r1<=r2)) ? `${c1},${r1}|${c2},${r2}` : `${c2},${r2}|${c1},${r1}`; }
+function rebuildWalls(){
+  wallSet=new Set();
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){ const t=grid[r][c];
+    if(t.cover.N===2) wallSet.add(edgeKey(c,r,c,r-1));
+    if(t.cover.S===2) wallSet.add(edgeKey(c,r,c,r+1));
+    if(t.cover.E===2) wallSet.add(edgeKey(c,r,c+1,r));
+    if(t.cover.W===2) wallSet.add(edgeKey(c,r,c-1,r));
+  }
+}
+function wallBetween(ax,ay,bx,by){
+  const dx=bx-ax, dy=by-ay;
+  if(Math.abs(dx)+Math.abs(dy)===1) return wallSet.has(edgeKey(ax,ay,bx,by));
+  // diagonal: blocked only if BOTH corner orthogonal edges are walls
+  const e1=wallSet.has(edgeKey(ax,ay,ax+dx,ay)), e2=wallSet.has(edgeKey(ax,ay,ax,ay+dy));
+  return e1&&e2;
+}
+
+// ───────── LOS ─────────
+function lineCells(a,b){
+  let x0=a.c,y0=a.r,x1=b.c,y1=b.r;
+  let dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+  let x=x0,y=y0, n=1+dx+dy;
+  const xi=x1>x0?1:-1, yi=y1>y0?1:-1;
+  let err=dx-dy; dx*=2; dy*=2;
+  const cells=[];
+  for(; n>0; n--){ cells.push({c:x,r:y});
+    if(err>0){ x+=xi; err-=dy; }
+    else if(err<0){ y+=yi; err+=dx; }
+    else { x+=xi; y+=yi; err-=dy; err+=dx; n--; }
+  }
+  return cells;
+}
+function hasLOS(a,b){
+  const cells=lineCells(a,b);
+  for(let i=1;i<cells.length;i++){
+    const P=cells[i-1], Q=cells[i];
+    const touchesEnd = (P.c===a.c&&P.r===a.r)||(Q.c===b.c&&Q.r===b.r)||(P.c===b.c&&P.r===b.r)||(Q.c===a.c&&Q.r===a.r);
+    if(touchesEnd) continue; // own/target cover doesn't block the shot between them
+    if(wallBetween(P.c,P.r,Q.c,Q.r)) return false;
+  }
+  return true;
+}
+
+// ───────── cover / flank ─────────
+function coverAt(c,r){ return grid[r][c].cover; }
+function activeCoverFor(target, shooter){
+  // flyers and Marked targets get no cover (exposed)
+  if(target.flying || target.marked) return 0;
+  const cv=coverAt(target.c,target.r);
+  const dc=sign(shooter.c-target.c), dr=sign(shooter.r-target.r); let best=0;
+  if(dr<0) best=Math.max(best,cv.N);
+  if(dr>0) best=Math.max(best,cv.S);
+  if(dc>0) best=Math.max(best,cv.E);
+  if(dc<0) best=Math.max(best,cv.W);
+  // shooting from higher ground strips one level of the target's cover
+  if(elevOf(shooter) > elevOf(target)) best=Math.max(0,best-1);
+  return best;
+}
+function hasAnyCover(u){ const cv=coverAt(u.c,u.r); return cv.N||cv.E||cv.S||cv.W; }
+function isFlanked(shooter,target){ return activeCoverFor(target,shooter)===0; }
+
+// ───────── classes ─────────
+// 6 weird-West frontier classes (LAUNCH roster). All use the 'agent' placeholder sprite, tinted per class.
+const PLAYER_CLASSES = {
+  Sharpshooter:{ hp:8,  aim:76, mobility:3, crit:10, critAtRange:3, tint:'hue-rotate(15deg) saturate(1.2) brightness(1.05)', weapon:{name:'Long Rifle', dmgMin:5,dmgMax:7, optimalRange:6, maxRange:0, falloff:0, falloffSign:'bonus'} },
+  Ironclad:   { hp:14, aim:62, mobility:3, crit:5,  critAtRange:0, tint:'hue-rotate(0deg) saturate(.5) brightness(.85)', weapon:{name:'Scattergun', dmgMin:4,dmgMax:6, optimalRange:2, maxRange:6, falloff:9, falloffSign:'penalty'} },
+  Bombardier: { hp:10, aim:65, mobility:4, crit:10, critAtRange:0, grenades:2, tint:'hue-rotate(-30deg) saturate(1.5)', weapon:{name:'Carbine', dmgMin:3,dmgMax:6, optimalRange:5, maxRange:10, falloff:6, falloffSign:'penalty'} },
+  Sawbones:   { hp:9,  aim:64, mobility:4, crit:8,  critAtRange:0, heals:2, tint:'hue-rotate(120deg) saturate(.9) brightness(1.05)', weapon:{name:'Sidearm', dmgMin:3,dmgMax:5, optimalRange:4, maxRange:9, falloff:7, falloffSign:'penalty'} },
+  Outrider:   { hp:10, aim:70, mobility:5, crit:15, critAtRange:0, marks:1, tint:'hue-rotate(40deg) saturate(1.4) brightness(1.1)', weapon:{name:'Coachgun', dmgMin:4,dmgMax:8, optimalRange:2, maxRange:8, falloff:12, falloffSign:'penalty'} },
+  Bannerman:  { hp:10, aim:66, mobility:4, crit:8,  critAtRange:0, rallies:2, tint:'hue-rotate(-60deg) saturate(1.3)', weapon:{name:'Repeater', dmgMin:3,dmgMax:6, optimalRange:5, maxRange:9, falloff:7, falloffSign:'penalty'} },
+};
+// 5 Rim-ring enemy families (placeholder sprites). 'hex' = Caster's curse-bolt (reuses the old acid-lob path).
+const ENEMY_CLASSES = {
+  Raider: { sprite:'shadefang', hp:7,  aim:62, mobility:5, crit:10, critAtRange:0, weapon:{name:'Cleaver', dmgMin:3,dmgMax:6, optimalRange:1, maxRange:5, falloff:13, falloffSign:'penalty'} },
+  Brute:  { sprite:'cinderpaw', hp:16, aim:58, mobility:3, crit:8,  critAtRange:0, weapon:{name:'Maul', dmgMin:5,dmgMax:9, optimalRange:1, maxRange:4, falloff:14, falloffSign:'penalty'} },
+  Flyer:  { sprite:'hexmoth', hp:7,  aim:66, mobility:6, crit:12, critAtRange:0, flying:true, weapon:{name:'Talons', dmgMin:3,dmgMax:5, optimalRange:2, maxRange:6, falloff:8, falloffSign:'penalty'} },
+  Caster: { sprite:'frostwarden', hp:8, aim:70, mobility:3, crit:8, critAtRange:0, acidLob:1, weapon:{name:'Hex-bolt', dmgMin:3,dmgMax:6, optimalRange:5, maxRange:10, falloff:6, falloffSign:'penalty'} },
+  Swarm:  { sprite:'swiftpaw', hp:5,  aim:60, mobility:6, crit:10, critAtRange:0, weapon:{name:'Fangs', dmgMin:2,dmgMax:5, optimalRange:1, maxRange:4, falloff:14, falloffSign:'penalty'} },
+};
+const HEAL_AMOUNT = 6;
+// per-unit signature color + glyph so classes read instantly at sprite size (until real sprites land)
+const UNIT_META = {
+  Sharpshooter:{color:'#2bd4d4',icon:'⌖'}, Ironclad:{color:'#9aa6bf',icon:'▣'}, Bombardier:{color:'#ff8a2a',icon:'✸'},
+  Sawbones:{color:'#5fe08a',icon:'✚'}, Outrider:{color:'#ffd34a',icon:'»'}, Bannerman:{color:'#ff5a7a',icon:'⚑'},
+  Raider:{color:'#9bcf4a',icon:'‹'}, Brute:{color:'#c07a3a',icon:'▲'}, Flyer:{color:'#7ac0ff',icon:'✦'}, Caster:{color:'#b06aff',icon:'✷'}, Swarm:{color:'#cfcfcf',icon:'∴'},
+};
+const META = (u)=>UNIT_META[u.cls]||{color:'#888',icon:'?'};
+
+// ── missions: each carries an objective; ≥1 has a PRESSURE clock (rite → lose; hold → survive) ──
+const MISSIONS = {
+  hunt: { name:'Hunt — Clear the Rim', desc:'Wipe out every hostile that crossed.' },
+  rite: { name:'Disrupt the Rite', desc:'Kill the Casters before the rite completes.', riteTurns:9 },
+  hold: { name:'Hold the Cut', desc:'Survive the assault until relief arrives.', holdTurns:6 },
+};
+let missionKey='hunt', mission=null;
+function setMission(k){ missionKey=k; if(uiScreen!=='combat') setScreen('combat'); newGame(); }
+
+// ═════════ CAMPAIGN · FRONTIER (M1.5) + FORGE (M1.6) ═════════
+const SOLDIER_NAMES = { Sharpshooter:'Eli Mercer', Ironclad:'Ruth Holloway', Bombardier:'Cal Briggs', Sawbones:'Mara Pryor', Outrider:'Wren Salt', Bannerman:'Tom Vane' };
+const CHAPTER = [ {type:'hunt', name:'First Blood'}, {type:'rite', name:'The Chanting Rocks'}, {type:'hold', name:'Hold the Cut'} ];
+const BUILDINGS = [
+  { key:'Forge',      label:'Forge',      blurb:'weapons & grafts — the chapter gate' },
+  { key:'Infirmary',  label:'Infirmary',  blurb:'building it clears every wound' },
+  { key:'Watchtower', label:'Watchtower', blurb:'+1 squad sight per tier, in the field' },
+  { key:'Hall',       label:'Hall',       blurb:'building it restores +10 Humanity to all' },
+];
+function upgradeCost(tier){ return [5,9,14][tier] ?? 99; }     // iron to advance FROM this tier
+const FORGE_CRAFT = { name:'Shard Rounds', cost:4, taint:15, hum:-10, desc:'a guaranteed killing shot each mission, +1 dmg — but the shards whisper' };
+
+let camp=null, uiScreen='frontier';
+function freshCamp(){ return {
+  ironman:false, iron:2, missionIndex:0, cleared:false,
+  buildings:{ Forge:0, Infirmary:0, Watchtower:0, Hall:0 }, upgradedThisVisit:false, cairn:[],
+  roster: Object.keys(PLAYER_CLASSES).map(cls=>({ cls, name:SOLDIER_NAMES[cls]||cls, nickname:'', rank:0, picks:[], crafts:[], humanity:100, taint:0, kills:0, wound:0, missions:0, dead:false })),
+}; }
+function saveCamp(){ try{ localStorage.setItem('rwt-camp', JSON.stringify(camp)); }catch(e){} }
+function loadCamp(){ try{ const s=localStorage.getItem('rwt-camp'); if(s){ camp=JSON.parse(s); return true; } }catch(e){} return false; }
+function resetCamp(){ camp=freshCamp(); saveCamp(); setScreen('frontier'); }
+
+function findTreeOpt(cls,pid){ for(const rk of (TREES[cls]||[])){ if(rk.A.id===pid) return rk.A; if(rk.B.id===pid) return rk.B; } return null; }
+function applyRoster(u, e){
+  u.soldierName=e.name; u.nickname=e.nickname; u.rank=0; u.picks=[];
+  for(const pid of (e.picks||[])){ const opt=findTreeOpt(e.cls,pid); if(opt){ opt.apply(u); u.picks.push(pid); u.rank++; } }
+  for(const cr of (e.crafts||[])){ if(cr==='shard'){ u.sureMax=(u.sureMax||0)+1; u.sureShots=(u.sureShots||0)+1; u.dmgBonus=(u.dmgBonus||0)+1; } }
+  u.humanity=e.humanity; u.taint=e.taint; u.kills=e.kills;
+  if(camp && camp.buildings.Watchtower>0) u.sightBonus=(u.sightBonus||0)+camp.buildings.Watchtower;
+  u.hp=Math.max(1, u.maxHp-(e.wound||0));
+}
+function rosterPreview(r){ const save=unitSeq; const u=makeUnit('player', r.cls, 0,0); applyRoster(u,r); unitSeq=save; return u; }
+const NICKS=['Crow','Ironwood','Stray','Holdfast','Ash','Quiet','Cinder','Bramble'];
+function maybeNickname(e){ if(e.nickname) return;
+  if(e.taint>=20){ e.nickname='Touched'; return; }
+  if(e.kills>=4){ e.nickname='Deadeye'; return; }
+  if(e.missions>=2){ e.nickname=NICKS[(e.cls.length+e.missions)%NICKS.length]; }
+}
+
+// ── screen switching ──
+function setScreen(s){ uiScreen=s;
+  if(window.Snd) Snd.music((s==='combat')?'audio/sfx/the-drop.mp3':'audio/music/title-theme.mp3', (s==='combat')?0.2:0.32);
+  const meta=document.getElementById('meta'), wrap=document.getElementById('wrap'), dr=document.getElementById('diffrow');
+  if(meta) meta.style.display=(s==='combat')?'none':'flex';
+  if(wrap) wrap.style.display=(s==='combat')?'flex':'none';
+  if(dr)   dr.style.display=(s==='combat')?'flex':'none';
+  if(s==='frontier') renderFrontier();
+}
+
+// ── the Frontier ──
+function renderFrontier(){
+  const m=document.getElementById('meta'), c=camp; if(!m||!c) return;
+  const idx=Math.min(c.missionIndex, CHAPTER.length-1);
+  const chap = c.cleared ? '✔ Rim chapter cleared — the first Forge stands.' : `Next sortie: ${CHAPTER[idx].name} (${MISSIONS[CHAPTER[idx].type].desc})`;
+  let html = `<h2>The Frontier — holding the Rim</h2><div class="ftag">${chap}</div>`+
+    `<div class="res">⛏ Iron <b>${c.iron}</b>${c.upgradedThisVisit?' · <span style="color:#8a7d63">one build per return — spent</span>':''} · sortie ${Math.min(c.missionIndex+1,CHAPTER.length)}/${CHAPTER.length}</div>`+
+    `<div class="mcols">`;
+  // company
+  html += `<div class="mcol"><div class="ftag">Company</div>`;
+  for(const r of c.roster){
+    if(r.dead){ html+=`<div class="mcard dead"><span class="nmln">${r.name}</span> — fallen</div>`; continue; }
+    const pv=rosterPreview(r), maxHp=pv.maxHp, hp=Math.max(1,maxHp-(r.wound||0));
+    html+=`<div class="mcard"><span class="nmln">${r.name}</span>${r.nickname?` <span class="nk">“${r.nickname}”</span>`:''} · ${r.cls} · R${r.rank}`+
+      `<div class="sub2">HP ${hp}/${maxHp} · Humanity ${r.humanity} · Taint ${r.taint}${(r.crafts&&r.crafts.length)?' · '+r.crafts.length+' craft':''}${r.wound?' · <span style="color:#ff8aa8">wounded</span>':''}</div>`+
+      `<div class="bar2"><i style="width:${Math.round(100*hp/maxHp)}%;background:linear-gradient(#6dff9b,#2fae5f)"></i></div></div>`;
+  }
+  if(c.cairn.length) html+=`<div class="cairn">⚰ The Cairn: ${c.cairn.map(x=>x.name+(x.nickname?` “${x.nickname}”`:'')).join(' · ')}</div>`;
+  html += `</div>`;
+  // buildings
+  html += `<div class="mcol"><div class="ftag">Buildings — one advance per return, scarce Iron</div>`;
+  for(const b of BUILDINGS){ const tier=c.buildings[b.key], cost=upgradeCost(tier);
+    const can=!c.upgradedThisVisit && tier<3 && c.iron>=cost;
+    html+=`<div class="bldg"><div><b>${b.label}</b> <span class="tiers">${'◆'.repeat(tier)+'◇'.repeat(3-tier)}</span><div class="sub2">${b.blurb}</div></div>`+
+      `<button class="mbtn" ${can?'':'disabled'} onclick="advanceBuilding('${b.key}')">${tier>=3?'maxed':'Build · '+cost+'⛏'}</button></div>`;
+  }
+  if(c.buildings.Forge>=1){
+    html+=`<div class="bldg graft" style="border-color:#6a3a72"><div><b>Forge ▸ ${FORGE_CRAFT.name}</b><div class="sub2">${FORGE_CRAFT.desc}</div></div>`+
+      `<button class="mbtn graft" ${c.iron>=FORGE_CRAFT.cost?'':'disabled'} onclick="openForge()">Craft · ${FORGE_CRAFT.cost}⛏</button></div>`;
+  }
+  html += `</div></div>`;
+  html += `<div class="togrow"><label><input type="checkbox" id="ironmanchk" ${c.ironman?'checked':''} onchange="toggleIronman()"> Ironman — the fallen stay fallen</label>`+
+    `<button class="mbtn danger" onclick="if(confirm('Wipe the campaign and start fresh?'))resetCamp()">Reset campaign</button></div>`;
+  const alive=c.roster.filter(r=>!r.dead).length;
+  if(alive===0) html += `<div class="res" style="color:#ff8aa8">The company is gone — every name rests on the Cairn. There's no one left to deploy.</div>`+
+    `<button class="mbtn go" onclick="resetCamp()">Raise a new company</button>`;
+  else html += `<button class="mbtn go" onclick="deployNext()">Deploy ▸ ${CHAPTER[idx].name}</button>`;
+  m.innerHTML=html;
+}
+function toggleIronman(){ const chk=document.getElementById('ironmanchk'); if(chk){ camp.ironman=chk.checked; saveCamp(); } }
+function advanceBuilding(key){ const tier=camp.buildings[key], cost=upgradeCost(tier);
+  if(camp.upgradedThisVisit||tier>=3||camp.iron<cost) return;
+  camp.iron-=cost; camp.buildings[key]=tier+1; camp.upgradedThisVisit=true;
+  if(key==='Infirmary'){ for(const r of camp.roster){ if(!r.dead) r.wound=0; } }
+  if(key==='Hall'){ for(const r of camp.roster){ if(!r.dead) r.humanity=Math.min(100,r.humanity+10); } }
+  if(key==='Forge' && !camp.cleared){ camp.cleared=true; }
+  saveCamp(); renderFrontier();
+}
+function deployNext(){ const idx=Math.min(camp.missionIndex, CHAPTER.length-1);
+  camp.upgradedThisVisit=false; camp._snapshot=JSON.stringify(camp.roster);
+  const sv=document.getElementById('seedval'); if(sv) sv.value = 1337 + camp.missionIndex*137;
+  missionKey=CHAPTER[idx].type; setScreen('combat'); newGame();
+}
+// ── Forge craft (M1.6) ──
+function openForge(){ if(camp.iron<FORGE_CRAFT.cost) return; const m=document.getElementById('meta');
+  let html=`<h2>Forge — ${FORGE_CRAFT.name}</h2><div class="ftag">${FORGE_CRAFT.desc}. Choose who carries it — Taint +${FORGE_CRAFT.taint}, Humanity ${FORGE_CRAFT.hum}.</div><div class="deci">`;
+  for(const r of camp.roster.filter(x=>!x.dead)) html+=`<button class="dopt" onclick="craftShard('${r.cls}')"><b>${r.name}</b> · ${r.cls} · Taint ${r.taint} → <span style="color:#ff6a9a">${r.taint+FORGE_CRAFT.taint}</span></button>`;
+  html+=`</div><button class="mbtn" onclick="renderFrontier()">← back</button>`; m.innerHTML=html;
+}
+function craftShard(cls){ const r=camp.roster.find(x=>x.cls===cls); if(!r||camp.iron<FORGE_CRAFT.cost) return;
+  camp.iron-=FORGE_CRAFT.cost; r.crafts.push('shard'); r.taint+=FORGE_CRAFT.taint; r.humanity=Math.max(0,r.humanity+FORGE_CRAFT.hum);
+  saveCamp(); renderFrontier();
+}
+// ── mission end → sync roster, rewards, debrief decision ──
+function finishMission(win){ if(camp && uiScreen==='combat' && mission && !mission.resolved && !mission.ending){ mission.ending=true; const m=mission; setTimeout(()=>{ if(mission===m && !m.resolved) endMission(win); }, 1100); } }
+function endMission(win){
+  if(!mission || mission.resolved) return; mission.resolved=true;
+  const deployed=units.filter(u=>u.side==='player');
+  if(!win && !camp.ironman){ if(camp._snapshot) camp.roster=JSON.parse(camp._snapshot); renderDebrief(false,0); return; }
+  for(const u of deployed){ const e=camp.roster.find(r=>r.cls===u.cls); if(!e||e.dead) continue;
+    e.rank=u.rank; e.picks=(u.picks||[]).slice(); e.humanity=u.humanity; e.taint=u.taint; e.kills=u.kills;
+    if(u.alive){ e.wound=Math.max(0,u.maxHp-u.hp); if(win){ e.missions++; maybeNickname(e); } }
+    else if(camp.ironman){ e.dead=true; camp.cairn.push({name:e.name, nickname:e.nickname, cls:e.cls, missions:e.missions}); }
+    else e.wound=Math.max(0,u.maxHp-1);
+  }
+  let reward=0; if(win){ reward=3+camp.missionIndex; camp.iron+=reward; camp.missionIndex++; }
+  saveCamp(); renderDebrief(win, reward);
+}
+function renderDebrief(win, reward){
+  setScreen('debrief'); const m=document.getElementById('meta');
+  if(!win){ m.innerHTML=`<h2 style="color:#ff8aa8">${camp.ironman?'The line broke':'Fell back'}</h2>`+
+    `<div class="ftag">${camp.ironman?'The fallen are gone. What remains regroups at the Frontier.':'No ground gained — the company pulls back to try the line again.'}</div>`+
+    `<button class="mbtn go" onclick="setScreen('frontier')">Return to the Frontier</button>`; return; }
+  m.innerHTML=`<h2 style="color:#9bffb0">Sector held</h2><div class="res">Salvage hauled back: ⛏ <b>${reward}</b> Iron.</div>`+
+    `<div class="ftag">One call before you ride back — the rest will keep:</div><div class="deci">`+
+    `<button class="dopt" onclick="debriefChoose('iron')"><b>Strip the field</b> — pull every last scrap. <span style="color:#ffd9a0">+2 Iron</span></button>`+
+    `<button class="dopt" onclick="debriefChoose('heal')"><b>Tend the wounded</b> — clear every soldier's wounds.</button>`+
+    `<button class="dopt" onclick="debriefChoose('hum')"><b>Rest, write home</b> — <span style="color:#9bd0ff">+12 Humanity</span> to all.</button></div>`;
+}
+function debriefChoose(k){
+  if(k==='iron') camp.iron+=2;
+  else if(k==='heal'){ for(const r of camp.roster) if(!r.dead) r.wound=0; }
+  else if(k==='hum'){ for(const r of camp.roster) if(!r.dead) r.humanity=Math.min(100,r.humanity+12); }
+  saveCamp(); setScreen('frontier');
+}
+
+// ── skill trees: one-of-two per rank; ≥1 rank is HUMAN tech vs MONSTER graft ──
+// effects are CERTAINTY TOOLS + stat shifts; grafts add Taint / cost Humanity.
+const TREES = {
+  Sharpshooter: [
+    { label:'Rank 1', A:{id:'deadeye', name:'Deadeye', desc:'+crit the farther you shoot', apply:u=>u.critAtRange+=4},
+                      B:{id:'steady',  name:'Steady Hands', desc:'+1 guaranteed hit per mission', apply:u=>{u.sureMax=(u.sureMax||0)+1; u.sureShots=(u.sureShots||0)+1;}} },
+    { label:'Rank 2', A:{id:'sharp_h', name:'Field Scope', human:true, desc:'+2 sight, +5 aim', apply:u=>{u.sightBonus=(u.sightBonus||0)+2; u.aim+=5;}},
+                      B:{id:'sharp_g', name:'Shard Eye', graft:true, taint:22, hum:-16, desc:'GRAFT: see through fog & walls; +10 aim', apply:u=>{u.seeAll=true; u.aim+=10;}} },
+  ],
+  Ironclad: [
+    { label:'Rank 1', A:{id:'iron_a', name:'Bulwark', desc:'+4 HP', apply:u=>{u.maxHp+=4; u.hp+=4;}},
+                      B:{id:'iron_b', name:'Close Quarters', desc:'+8 aim', apply:u=>u.aim+=8} },
+    { label:'Rank 2', A:{id:'iron_h', name:'Trench Plate', human:true, desc:'+6 HP', apply:u=>{u.maxHp+=6; u.hp+=6;}},
+                      B:{id:'iron_g', name:'Monster-Hide', graft:true, taint:24, hum:-18, desc:'GRAFT: +12 HP, regrows 2/turn', apply:u=>{u.maxHp+=12; u.hp+=12; u.regen=(u.regen||0)+2;}} },
+  ],
+  Bombardier: [
+    { label:'Rank 1', A:{id:'bomb_a', name:'Heavy Ordnance', desc:'+1 grenade', apply:u=>u.grenades+=1},
+                      B:{id:'bomb_b', name:'Shrapnel', desc:'+2 grenade damage', apply:u=>u.grenadeBonus=(u.grenadeBonus||0)+2} },
+    { label:'Rank 2', A:{id:'bomb_h', name:'Sapper', human:true, desc:'+1 grenade', apply:u=>u.grenades+=1},
+                      B:{id:'bomb_g', name:'Blight Charges', graft:true, taint:20, hum:-14, desc:'GRAFT: +4 grenade damage', apply:u=>u.grenadeBonus=(u.grenadeBonus||0)+4} },
+  ],
+  Sawbones: [
+    { label:'Rank 1', A:{id:'saw_a', name:'Triage', desc:'+1 heal charge', apply:u=>u.heals+=1},
+                      B:{id:'saw_b', name:'Stimulants', desc:'+3 healing', apply:u=>u.healBonus=(u.healBonus||0)+3} },
+    { label:'Rank 2', A:{id:'saw_h', name:'Surgeon', human:true, desc:'+1 heal charge', apply:u=>u.heals+=1},
+                      B:{id:'saw_g', name:'Grafted Organs', graft:true, taint:22, hum:-16, desc:'GRAFT: +3 healing, +4 own HP', apply:u=>{u.healBonus=(u.healBonus||0)+3; u.maxHp+=4; u.hp+=4;}} },
+  ],
+  Outrider: [
+    { label:'Rank 1', A:{id:'out_a', name:'Pathfinder', desc:'+1 mobility', apply:u=>u.mobility+=1},
+                      B:{id:'out_b', name:'Hunter’s Eye', desc:'+1 Mark', apply:u=>u.marks+=1} },
+    { label:'Rank 2', A:{id:'out_h', name:'Scout', human:true, desc:'+2 sight, +1 mobility', apply:u=>{u.sightBonus=(u.sightBonus||0)+2; u.mobility+=1;}},
+                      B:{id:'out_g', name:'Wing-Graft', graft:true, taint:24, hum:-18, desc:'GRAFT: FLY — ignore terrain; +1 mobility', apply:u=>{u.flying=true; u.mobility+=1;}} },
+  ],
+  Bannerman: [
+    { label:'Rank 1', A:{id:'ban_a', name:'Inspire', desc:'+1 Rally', apply:u=>u.rallies+=1},
+                      B:{id:'ban_b', name:'Veteran', desc:'+6 aim', apply:u=>u.aim+=6} },
+    { label:'Rank 2', A:{id:'ban_h', name:'Officer', human:true, desc:'+1 Rally', apply:u=>u.rallies+=1},
+                      B:{id:'ban_g', name:'Drop-Resonance', graft:true, taint:20, hum:-14, desc:'GRAFT: +1 Rally, +5 aim', apply:u=>{u.rallies+=1; u.aim+=5;}} },
+  ],
+};
+
+// ───────── units ─────────
+let units, selected=null, mode='idle', pending=null;
+let unitSeq=0;
+function makeUnit(side, clsName, c, r){
+  const def = side==='player'? PLAYER_CLASSES[clsName] : ENEMY_CLASSES[clsName];
+  const aimMod = side==='enemy'? (DIFFICULTY[difficulty].aimMod||0) : 0;
+  return { id:side[0]+'-'+clsName+'-'+(unitSeq++), side, cls:clsName, c, r, hp:def.hp, maxHp:def.hp, aim:def.aim+aimMod, mobility:def.mobility,
+    crit:def.crit, critAtRange:def.critAtRange||0, weapon:def.weapon, grenades:def.grenades||0, acidLob:def.acidLob||0,
+    heals:def.heals||0, rallies:def.rallies||0, marks:def.marks||0, flying:def.flying||false, marked:false,
+    rank:0, kills:0, humanity:100, taint:0, picks:[], sightBonus:0, dmgBonus:0, grenadeBonus:0, healBonus:0, regen:0, sureMax:0, sureShots:0,
+    spriteKind: clsName, tint:'', actions:2, movedThisTurn:false, shotThisTurn:false,
+    overwatch:false, hunkered:false, alive:true, state:'idle', stateTimer:0, pod:null, awake:true };
+}
+function initUnits(){
+  unitSeq=0; units=[];
+  // players — from the persistent campaign roster (carry rank/picks/wounds/Humanity/Taint); fall back to a default squad
+  const spawns=[[0,ROWS-1],[1,ROWS-1],[1,ROWS-2],[0,ROWS-2],[2,ROWS-1],[2,ROWS-2]];
+  const order=['Sharpshooter','Ironclad','Bombardier','Sawbones','Outrider','Bannerman'];
+  let si=0;
+  for(const cls of order){ const e = camp ? camp.roster.find(r=>r.cls===cls) : null;
+    if(e && e.dead) continue;
+    const [c,r]=spawns[si++ % spawns.length]; const u=makeUnit('player',cls,c,r);
+    if(e) applyRoster(u,e); units.push(u);
+  }
+  // enemies — same 5 families, laid out per mission objective
+  let ev;
+  const EC=COLS-1, EB=COLS-2, EA=COLS-3;   // enemy columns hug the right edge of the larger map
+  if(missionKey==='rite')      ev=[['Brute',EB,5],['Raider',EC,6],['Swarm',EB,8],['Caster',EC,2],['Caster',EB,3],['Flyer',EA,1]];   // two channelers
+  else if(missionKey==='hold') ev=[['Brute',EB,4],['Raider',EC,5],['Swarm',EB,6],['Caster',EC,2],['Flyer',EB,1],['Raider',EA,8],['Swarm',EC,8]]; // heavier assault
+  else                         ev=[['Brute',EB,3],['Raider',EC,5],['Swarm',EB,7],['Caster',EC,1],['Flyer',EB,2]];
+  for(const [cls,c,r] of ev) units.push(makeUnit('enemy',cls,c,r));
+  for(const u of units){ if(u.side==='enemy'){ u.awake=false; u.pod = (u.cls==='Caster'||u.cls==='Flyer')?'B':'A'; } }
+}
+function unitAt(c,r){ return units.find(u=>u.alive&&u.c===c&&u.r===r); }
+function living(side){ return units.filter(u=>u.alive&&u.side===side); }
+
+// ───────── fog of war + pods ─────────
+let revealed=new Set(), visibleSet=new Set();
+function sightRadius(u){ return (u.cls==='Outrider'?7:6) + (elevOf(u)>0?2:0) + (u.sightBonus||0); }   // Outrider scouts; high ground sees further
+function computeVisible(){
+  visibleSet=new Set();
+  for(const u of living('player')){
+    const sr=sightRadius(u); visibleSet.add(u.c+','+u.r); revealed.add(u.c+','+u.r);
+    for(let r=Math.max(0,u.r-sr);r<=Math.min(ROWS-1,u.r+sr);r++)
+      for(let c=Math.max(0,u.c-sr);c<=Math.min(COLS-1,u.c+sr);c++){
+        if(cheb(u,{c,r})<=sr && hasLOS(u,{c,r})){ visibleSet.add(c+','+r); revealed.add(c+','+r); }
+      }
+  }
+  // Shard Eye graft: a soldier who took it sees every enemy through fog & walls
+  if(living('player').some(p=>p.seeAll)){ for(const e of living('enemy')){ visibleSet.add(e.c+','+e.r); revealed.add(e.c+','+e.r); } }
+  // pod activation: a dormant enemy wakes its whole pod when SEEN or when a soldier CLOSES IN (even unseen)
+  for(const e of living('enemy')){ if(e.awake) continue;
+    // seeing a dormant pack no longer wakes it — surprise favors whoever spots first; they wake only when you CLOSE IN (or open fire, handled in resolveShot)
+    for(const p of living('player')){ if(cheb(e,p)<=TUNING.WAKE_DIST){ wakePod(e.pod); break; } }
+  }
+}
+function wakePod(pid){
+  let any=false; for(const e of units){ if(e.alive&&e.side==='enemy'&&e.pod===pid&&!e.awake){ e.awake=true; e.justWoke=true; any=true; } }
+  if(any){ log('b','⚠ A pack stirs — you are spotted!'); bark('h','Spotter: Contact. They know we are here now.','spotter-contact-a'); }
+}
+// when a pod activates it gets a free scramble into cover (XCOM-style reposition-on-reveal)
+function bestRepositionTile(e){
+  const reach=reachable(e); let bestTile=null;
+  for(const k in reach){ const [c,r]=k.split(',').map(Number); const steps=reach[k];
+    const np=living('player').reduce((m,p)=>{ const d=cheb({c,r},p); return d<m.d?{d,p}:m; },{d:1e9,p:null});
+    const cov = np.p? activeCoverFor({c,r}, np.p):0;
+    const shot=bestShotFrom(e,c,r);
+    let score = TUNING.AI.coverW*cov + (shot? shot.hit + (shot.flank?TUNING.AI.flankBonus:0):0) - TUNING.AI.stepCost*steps + 8*(grid[r][c].elevation||0);
+    let selfFlanked=false; for(const p of living('player')){ if(hasLOS(p,{c,r}) && activeCoverFor({c,r},p)===0){ selfFlanked=true; break; } }
+    if(selfFlanked) score-=TUNING.AI.selfFlankPenalty;
+    if(!bestTile||score>bestTile.score) bestTile={c,r,score,steps};
+  }
+  return bestTile;
+}
+function scatterWoken(){
+  const woken=units.filter(u=>u.alive&&u.side==='enemy'&&u.justWoke);
+  if(!woken.length) return false;
+  for(const e of woken){ e.justWoke=false; const bt=bestRepositionTile(e); if(bt && (bt.c!==e.c||bt.r!==e.r)){ e.c=bt.c; e.r=bt.r; } }
+  log('b','The pack breaks for cover.');
+  return true;
+}
+function enemyVisible(e){ return visibleSet.has(e.c+','+e.r); }
+
+// ───────── combat math ─────────
+function hitMath(shooter, dist, coverLevel, hunkered, moved, overwatch, elevAim){
+  let base=shooter.aim;
+  const over=Math.max(0, dist-shooter.weapon.optimalRange);
+  let distTerm=0;
+  if(shooter.weapon.falloffSign==='penalty') distTerm=-over*shooter.weapon.falloff;
+  else if(shooter.weapon.falloffSign==='bonus'){ const under=Math.max(0, shooter.weapon.optimalRange-dist); distTerm=Math.min(TUNING.BONUS_CAP, over*TUNING.BONUS_PER) - under*TUNING.BONUS_CLOSE; }
+  const coverTerm = -(hunkered? (TUNING.COVER_HUNKER[coverLevel]||0) : (TUNING.COVER[coverLevel]||0));
+  let pen=0;
+  if(moved && shooter.cls==='Sharpshooter') pen-=TUNING.SNAPSHOT_PENALTY;
+  if(overwatch) pen-=TUNING.OVERWATCH_PENALTY;
+  return clamp(Math.round(base+distTerm+coverTerm+pen+(elevAim||0)), TUNING.HIT_FLOOR, TUNING.HIT_CEIL);
+}
+function critMath(shooter, dist, flanked, hunkered){
+  if(hunkered) return 0;
+  let c=shooter.crit + (shooter.critAtRange||0)*Math.max(0, dist-shooter.weapon.optimalRange);
+  if(flanked) c+=TUNING.FLANK_CRIT;
+  return clamp(Math.round(c),0,100);
+}
+function hitChance(shooter,target,opts={}){
+  const dist=cheb(shooter,target);
+  const cl=activeCoverFor(target,shooter);
+  const elevAim = elevOf(shooter) > elevOf(target) ? TUNING.HIGH_GROUND_AIM : 0;
+  return hitMath(shooter,dist,cl,target.hunkered, opts.moved??shooter.movedThisTurn, opts.overwatch||false, elevAim);
+}
+function critChance(shooter,target){
+  return critMath(shooter,cheb(shooter,target),isFlanked(shooter,target),target.hunkered);
+}
+function rollDamage(shooter,isCrit){ let base=shooter.weapon.dmgMin+Math.floor(rng()*(shooter.weapon.dmgMax-shooter.weapon.dmgMin+1))+(shooter.dmgBonus||0); return isCrit? Math.round(base*TUNING.CRIT_MULT):base; }
+function inRange(shooter,target){ const d=cheb(shooter,target); return shooter.weapon.maxRange===0 || d<=shooter.weapon.maxRange; }
+function canTarget(shooter,target){
+  if(!(target.alive && target.side!==shooter.side && inRange(shooter,target) && hasLOS(shooter,target))) return false;
+  if(shooter.side==='player' && target.side==='enemy' && !visibleSet.has(target.c+','+target.r)) return false; // can't shoot what you can't see
+  return true;
+}
+
+function resolveShot(shooter,target,opts={}){
+  flashAttack(shooter);
+  const hit=hitChance(shooter,target,opts);
+  const moved = opts.moved??shooter.movedThisTurn;
+  const tag = opts.overwatch? ' (overwatch)':'';
+  if(rng()*100 >= hit){
+    if(shooter.sureShots>0){ shooter.sureShots--; log('g', `${nm(shooter)} steadies the shot — a sure hit. (${shooter.sureShots} left)`); }
+    else {
+      tracer(shooter,target,'miss'); floatText(target,'MISS','miss');
+      log('l', `${nm(shooter)} fires at ${nm(target)} — MISS${tag} (${hit}%).`);
+      if(shooter.side==='player'){ tut(6); if(rng()<0.5) bark('h','Spotter: Damn. Reset, find the angle.','spotter-miss-a'); if(target.side==='enemy'&&target.pod) wakePod(target.pod); }
+      return {hit:false};
+    }
+  }
+  const crit = critChance(shooter,target);
+  const isCrit = rng()*100 < crit;
+  const dmg = rollDamage(shooter,isCrit);
+  target.hp-=dmg; flashHit(target);
+  tracer(shooter,target,'hit'); floatText(target, '-'+dmg, isCrit?'crit':'hit'); if(window.Snd) Snd.sfx('payoff-hit', isCrit?0.7:0.5);
+  if(isCrit) log('c', `${nm(shooter)} CRITS ${nm(target)} for ${dmg}!${isFlanked(shooter,target)?' (flanked)':''}`);
+  else log(shooter.side==='player'?'g':'b', `${nm(shooter)} hits ${nm(target)} for ${dmg}.${tag}`);
+  if(target.hp<=0){ target.alive=false; target.hp=0; log(target.side==='player'?'b':'g', `${nm(target)} is down.`); if(window.Snd&&target.side==='player') Snd.sfx('squad-down',0.6);
+    if(target.side==='enemy'&&shooter.side==='player'){ shooter.kills=(shooter.kills||0)+1; bark('h','Spotter: That\'s one down.','spotter-kill-a'); if(eligibleToPromote(shooter)) log('c', `★ ${nm(shooter)} can advance — select them to choose a path.`); }
+  }
+  if(shooter.side==='player'&&target.side==='enemy'&&target.pod) wakePod(target.pod);   // opening fire alerts the pack
+  return {hit:true,isCrit,dmg};
+}
+
+function doGrenade(shooter, tc, tr){
+  flashAttack(shooter);
+  log('g', `${nm(shooter)} lobs a grenade at (${tc},${tr}).`); bark('h','Handler: Frag out — cover\'s coming down.','cal-grenade-a'); if(window.Snd) Snd.sfx('payoff-hit',0.7);
+  for(let r=tr-1;r<=tr+1;r++)for(let c=tc-1;c<=tc+1;c++){ if(!inB(c,r)) continue;
+    const u=unitAt(c,r); if(u){ const dmg=4+Math.floor(rng()*4)+(shooter.grenadeBonus||0); u.hp-=dmg; flashHit(u); log(u.side==='player'?'b':'g', `  ${nm(u)} caught in the blast (-${dmg}).`); if(u.hp<=0){u.alive=false;u.hp=0; log(u.side==='player'?'b':'g',`  ${nm(u)} is down.`); if(u.side==='enemy'){shooter.kills=(shooter.kills||0)+1;}} if(u.side==='enemy'&&u.pod) wakePod(u.pod); }
+    destroyCoverAt(c,r);
+  }
+  rebuildWalls();
+  shooter.grenades--;
+}
+function doAcidLob(shooter, tc, tr){
+  flashAttack(shooter);
+  log('b', `${nm(shooter)} hurls a hex at (${tc},${tr}) — withering the cover.`);
+  for(let r=tr-1;r<=tr+1;r++)for(let c=tc-1;c<=tc+1;c++){ if(!inB(c,r)) continue;
+    const u=unitAt(c,r); if(u){ const dmg=2+Math.floor(rng()*3); u.hp-=dmg; flashHit(u); log(u.side==='player'?'b':'g',`  ${nm(u)} struck by the hex (-${dmg}).`); if(u.hp<=0){u.alive=false;u.hp=0;log('b',`  ${nm(u)} is down.`);} }
+    destroyHalfCoverAt(c,r);
+  }
+  rebuildWalls();
+  shooter.acidLob--;
+}
+function destroyCoverAt(c,r){ const t=grid[r][c]; for(const s of ['N','E','S','W']) if(t.destructible[s]&&t.cover[s]>0){ t.cover[s]=0; t.destructible[s]=false; } }
+function destroyHalfCoverAt(c,r){ const t=grid[r][c]; for(const s of ['N','E','S','W']) if(t.destructible[s]&&t.cover[s]===1){ t.cover[s]=0; t.destructible[s]=false; } }
+
+// ───────── movement ─────────
+function reachable(u){
+  const out={}; out[u.c+','+u.r]=0; const q=[[u.c,u.r,0]];
+  while(q.length){ const [c,r,d]=q.shift(); if(d>=u.mobility) continue;
+    for(let dc=-1;dc<=1;dc++)for(let dr=-1;dr<=1;dr++){ if(!dc&&!dr) continue;
+      const nc=c+dc, nr=r+dr; if(!inB(nc,nr)) continue;
+      if(!u.flying && wallBetween(c,r,nc,nr)) continue;  // flyers ignore walls/gaps
+      if(unitAt(nc,nr)) continue;
+      const k=nc+','+nr; if(out[k]!==undefined && out[k]<=d+1) continue;
+      out[k]=d+1; q.push([nc,nr,d+1]);
+    }
+  }
+  delete out[u.c+','+u.r];
+  return out;
+}
+
+// ───────── sprites ─────────
+// Per-class / per-family crisp pixel sprites (MJ design → PixelLab image-to-pixelart, 128px RGBA).
+// Keyed by the class/family NAME so makeUnit can look up by cls directly. No tint needed — each
+// sprite carries its own identity now.
+const SPRITE_DIRS = {
+  Sharpshooter:{ static:'art/tactics/sharpshooter.png' },
+  Ironclad:{ static:'art/tactics/ironclad.png' },
+  Bombardier:{ static:'art/tactics/bombardier.png' },
+  Sawbones:{ static:'art/tactics/sawbones.png' },
+  Outrider:{ static:'art/tactics/outrider.png' },
+  Bannerman:{ static:'art/tactics/bannerman.png' },
+  Raider:{ static:'art/tactics/raider.png' },
+  Brute:{ static:'art/tactics/brute.png' },
+  Flyer:{ static:'art/tactics/flyer.png' },
+  Caster:{ static:'art/tactics/caster.png' },
+  Swarm:{ static:'art/tactics/swarm.png' },
+};
+const frames={}; // frames[kind][state] = [Image,...]
+function loadFrames(dir){ return new Promise(res=>{ const arr=[]; const next=i=>{ const im=new Image(); im.src=dir+'/frame_'+String(i).padStart(2,'0')+'.png'; im.onload=()=>{arr.push(im);next(i+1);}; im.onerror=()=>res(arr); }; next(0); }); }
+function loadOne(src){ return new Promise(res=>{ const im=new Image(); im.src=src; im.onload=()=>res([im]); im.onerror=()=>res([]); }); }
+async function loadAllSprites(){
+  for(const kind of Object.keys(SPRITE_DIRS)){ frames[kind]={};
+    const d=SPRITE_DIRS[kind];
+    if(d.static){ const one=await loadOne(d.static); frames[kind].idle=one; frames[kind].attack=one; }
+    else { frames[kind].idle = await loadFrames(d.idle); frames[kind].attack = await loadFrames(d.attack); }
+  }
+}
+
+// ───────── render ─────────
+const board=document.getElementById('board');
+let tileEls=[], occEls={};
+function buildBoard(){
+  board.innerHTML=''; tileEls=[]; occEls={}; board.style.width=(COLS*T)+'px'; board.style.height=(ROWS*T)+'px';
+  for(let r=0;r<ROWS;r++){ tileEls[r]=[]; for(let c=0;c<COLS;c++){
+    const d=document.createElement('div'); d.className='tile';
+    d.style.backgroundImage="linear-gradient(rgba(26,17,9,0.44),rgba(26,17,9,0.44)), url('art/tactics/env/"+groundFor(c,r)+".png')";
+    d.style.left=(c*T)+'px'; d.style.top=(r*T)+'px';
+    d.dataset.c=c; d.dataset.r=r;
+    d.addEventListener('click',()=>onTileClick(c,r));
+    d.addEventListener('mouseenter',()=>onTileHover(c,r));
+    board.appendChild(d); tileEls[r][c]=d;
+  }}
+  for(const u of units){
+    const o=document.createElement('div'); o.className='occ '+u.side; o.id='occ-'+u.id;
+    const img=document.createElement('img'); img.style.filter=u.tint;
+    o.innerHTML='<div class="base"></div><div class="hpbar"><i></i></div><div class="pips"><i></i><i></i></div><div class="badge" style="display:none"></div><div class="markpin" style="display:none">◎</div><div class="glyph"></div>';
+    o.appendChild(img);
+    board.appendChild(o); occEls[u.id]={o,img,dispC:u.c,dispR:u.r,walking:false};
+  }
+  buildScenery();
+  const psvg=document.createElementNS('http://www.w3.org/2000/svg','svg'); psvg.id='pathsvg'; psvg.setAttribute('width',COLS*T); psvg.setAttribute('height',ROWS*T); psvg.style.cssText='position:absolute;left:0;top:0;pointer-events:none;z-index:3;overflow:visible'; board.appendChild(psvg);
+}
+// movement route line — lies on the ground (tilts/zooms with the board); updates each render from the previewed/armed path
+function drawPath(){
+  const svg=document.getElementById('pathsvg'); if(!svg) return;
+  if(mode!=='move' || !selected || !movePathEnd){ svg.innerHTML=''; return; }
+  const [ec,er]=movePathEnd.split(',').map(Number);
+  const route=routePath(selected,ec,er);
+  if(!route||!route.length){ svg.innerHTML=''; return; }
+  const seq=[{c:selected.c,r:selected.r}].concat(route);
+  const X=p=>p.c*T+T/2, Y=p=>p.r*T+T/2, pts=seq.map(p=>X(p)+','+Y(p)).join(' '), e=seq[seq.length-1];
+  // highlight the cover edges of the landing tile so you know that spot is protected (amber=half, steel-blue=full)
+  const cv=grid[e.r][e.c].cover, L=e.c*T, Tp=e.r*T, Rr=L+T, Bb=Tp+T, cc=lv=>lv===2?'#bcd6ee':'#e0b257'; let edges='';
+  if(cv.N) edges+='<line x1="'+(L+4)+'" y1="'+(Tp+3)+'" x2="'+(Rr-4)+'" y2="'+(Tp+3)+'" stroke="'+cc(cv.N)+'" stroke-width="6" stroke-linecap="round"/>';
+  if(cv.S) edges+='<line x1="'+(L+4)+'" y1="'+(Bb-3)+'" x2="'+(Rr-4)+'" y2="'+(Bb-3)+'" stroke="'+cc(cv.S)+'" stroke-width="6" stroke-linecap="round"/>';
+  if(cv.W) edges+='<line x1="'+(L+3)+'" y1="'+(Tp+4)+'" x2="'+(L+3)+'" y2="'+(Bb-4)+'" stroke="'+cc(cv.W)+'" stroke-width="6" stroke-linecap="round"/>';
+  if(cv.E) edges+='<line x1="'+(Rr-3)+'" y1="'+(Tp+4)+'" x2="'+(Rr-3)+'" y2="'+(Bb-4)+'" stroke="'+cc(cv.E)+'" stroke-width="6" stroke-linecap="round"/>';
+  svg.innerHTML =
+    '<polyline points="'+pts+'" fill="none" stroke="#0a1622" stroke-width="7" stroke-linejoin="round" stroke-linecap="round" opacity="0.5"/>'+
+    '<polyline class="march" points="'+pts+'" fill="none" stroke="#9fd0ff" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="3 8"/>'+
+    edges+
+    '<circle cx="'+X(e)+'" cy="'+Y(e)+'" r="14" fill="none" stroke="#9fd0ff" stroke-width="3"/>'+
+    '<circle cx="'+X(e)+'" cy="'+Y(e)+'" r="4.5" fill="#9fd0ff"/>';
+}
+// hide scenery (props/buildings) on un-revealed fog tiles; dim it on seen-but-not-currently-visible tiles
+function updateSceneryFog(){ board.querySelectorAll('.scenery').forEach(s=>{ const k=s.dataset.c+','+s.dataset.r;
+  if(!revealed.has(k)){ s.style.display='none'; } else { s.style.display=''; s.style.opacity = visibleSet.has(k)?'1':'0.5'; } }); }
+// ── preview scenery: ground textures + cover props + landmarks (purely visual; cover data lives in the grid) ──
+const GROUND = { p:['tile-dirt','tile-planks','tile-scrub','tile-dirt'], mid:['tile-dirt','tile-scrub','tile-rock','tile-dirt','tile-scrub'], e:['tile-rock','tile-mud','tile-dirt','tile-rock'] };
+function groundFor(c,r){ const z=c<=2?'p':c>=COLS-3?'e':'mid'; const set=GROUND[z]; return set[(c*7+r*13)%set.length]; }
+const FULL_PROPS=['env-boulder','env-low-wall','env-crate','env-rubble','env-wagon'];
+const HALF_PROPS=['env-barrel','env-scrub','env-fence','env-crate','env-rubble','env-campfire'];
+function buildScenery(){
+  [].slice.call(board.querySelectorAll('.scenery')).forEach(function(e){ e.remove(); });
+  const taken={};
+  function place(c,r,img,opt){ opt=opt||{}; if(c<0||c>=COLS||r<0||r>=ROWS) return;
+    const s=document.createElement('div'); s.className='scenery'+(opt.decal?' decal':''); s.dataset.c=c; s.dataset.r=r;
+    s.style.left=(c*T)+'px'; s.style.top=(r*T)+'px'; if(opt.z) s.style.zIndex=opt.z;
+    const im=document.createElement('img'); im.src='art/tactics/env/'+img+'.png'; if(opt.scale) im.style.height=(opt.scale*T)+'px';
+    s.appendChild(im); board.appendChild(s); taken[c+','+r]=1; }
+  // cover props derived from the grid (so cover you fight behind is visible)
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){ const t=grid[r][c]; const lv=Math.max(t.cover.N,t.cover.E,t.cover.S,t.cover.W); if(!lv) continue;
+    const arr=lv>=2?FULL_PROPS:HALF_PROPS; place(c,r,arr[(c*5+r*11)%arr.length]); }
+  // fixed landmarks (skip if a cover prop already claimed the cell)
+  [[1,ROWS-4,'env-cabin',{scale:1.6}],[3,ROWS-3,'env-well',{}],[0,ROWS-6,'env-corral',{}],[3,4,'env-watchtower',{scale:1.8}],[COLS-4,2,'env-ruin',{scale:1.4}],[COLS-2,ROWS-4,'env-shard-cluster',{scale:1.3}],[1,ROWS-7,'env-dead-tree',{}]]
+    .forEach(function(L){ if(!taken[L[0]+','+L[1]]) place(L[0],L[1],L[2],L[3]); });
+  // blight ground decals near the Drop-side
+  place(COLS-3,ROWS-2,'env-blight-patch',{decal:true,z:1}); place(COLS-2,ROWS-3,'env-blight-patch',{decal:true,z:1});
+}
+let tiltOn=false, viewRot=0;
+let movePathSet=new Set(), movePathEnd='';   // "c,r" tiles on the previewed/armed movement route + its destination
+function toggleTilt(){ tiltOn=!tiltOn; board.classList.toggle('tilt',tiltOn); renderDiff(); }
+function rotateView(){ viewRot=(viewRot+90)%360; board.style.setProperty('--rot', viewRot+'deg'); render(); renderDiff(); }
+function pathSetTo(u,c,r){ const route=routePath(u,c,r)||walkPath({c:u.c,r:u.r},{c,r}); return new Set(route.map(p=>p.c+','+p.r)); }
+// depth for draw-order so nearer rows overlap farther ones — depends on the camera rotation
+function depthOf(u){ if(viewRot===0) return u.r; if(viewRot===90) return COLS-1-u.c; if(viewRot===180) return ROWS-1-u.r; return u.c; }
+// Cosmetic step-by-step walk: animate the occ element from its displayed cell to the unit's
+// logical cell, one tile at a time. Driven from render() so it covers players AND enemy AI moves.
+function walkPath(a,b){ const cells=[]; let c=a.c,r=a.r,g=0; while((c!==b.c||r!==b.r)&&g++<48){ c+=Math.sign(b.c-c); r+=Math.sign(b.r-r); cells.push({c,r}); } return cells; }
+// the REAL shortest route a unit would take (same constraints as reachable: walls, occupied tiles, mobility) — ordered, excludes start
+function bfsPath(sc,sr,tc,tr,flying,mob,ignore){
+  const start=sc+','+sr, dest=tc+','+tr; if(start===dest) return [];
+  const prev={}, seen={[start]:0}; const q=[[sc,sr,0]];
+  while(q.length){ const [c,r,d]=q.shift(); if(d>=mob) continue;
+    for(let dc=-1;dc<=1;dc++)for(let dr=-1;dr<=1;dr++){ if(!dc&&!dr) continue;
+      const nc=c+dc, nr=r+dr; if(!inB(nc,nr)) continue;
+      if(!flying && wallBetween(c,r,nc,nr)) continue;
+      const occ=unitAt(nc,nr); if(occ && occ!==ignore) continue;
+      const k=nc+','+nr; if(seen[k]!==undefined) continue;
+      seen[k]=d+1; prev[k]=c+','+r; q.push([nc,nr,d+1]);
+    }
+  }
+  if(seen[dest]===undefined) return null;
+  const path=[]; let cur=dest; while(cur!==start){ const a=cur.split(',').map(Number); path.unshift({c:a[0],r:a[1]}); cur=prev[cur]; }
+  return path;
+}
+function routePath(u,tc,tr){ return bfsPath(u.c,u.r,tc,tr,u.flying,u.mobility,u); }
+function startWalk(e,u){
+  const path=bfsPath(e.dispC,e.dispR,u.c,u.r,u.flying,99,u)||walkPath({c:e.dispC,r:e.dispR},{c:u.c,r:u.r});
+  if(!path.length){ e.dispC=u.c; e.dispR=u.r; return; }
+  e.walking=true; e.o.style.transition='left .2s linear, top .2s linear';
+  let i=0;
+  const step=()=>{
+    if(i>=path.length){ e.o.style.transition=''; e.walking=false; e.dispC=u.c; e.dispR=u.r; e.o.style.left=(u.c*T)+'px'; e.o.style.top=(u.r*T)+'px'; return; }
+    const p=path[i++]; e.dispC=p.c; e.dispR=p.r; e.o.style.left=(p.c*T)+'px'; e.o.style.top=(p.r*T)+'px';
+    setTimeout(step,205);
+  };
+  step();
+}
+function render(){
+  computeVisible();
+  const reach = (selected && mode==='move') ? reachable(selected) : {};
+  const targets = (selected && (mode==='shoot'||mode==='mark')) ? validTargets(selected) : [];
+  const tset = new Set(targets.map(t=>t.c+','+t.r));
+  const supSet = (selected && (mode==='heal'||mode==='rally'))
+    ? new Set(living('player').filter(a=>validSupport(selected,a,mode)).map(a=>a.c+','+a.r)) : new Set();
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    const t=grid[r][c], el=tileEls[r][c];
+    let zone = c<=2?'p-zone': c>=COLS-3?'e-zone':'mid';
+    let cls='tile '+zone;
+    if(reach[c+','+r]!==undefined) cls+=' reachable';
+    if(tset.has(c+','+r)) cls+=' target';
+    if(supSet.has(c+','+r)) cls+=' atarget';
+    if(t.elevation===1) cls+=' raised'; else if(t.elevation===2) cls+=' high';
+    if(!revealed.has(c+','+r)) cls+=' fog'; else if(!visibleSet.has(c+','+r)) cls+=' dim';
+    if(pending&&pending.type==='move'&&pending.c===c&&pending.r===r) cls+=' pmove';
+    if(pending&&pending.type==='grenade'&&Math.max(Math.abs(pending.c-c),Math.abs(pending.r-r))<=1) cls+=' aoe';
+    if(movePathSet.has(c+','+r)) cls += (movePathEnd===c+','+r) ? ' pathend' : ' path';
+    el.className=cls;
+    // cover shields + walls
+    let inner='';
+    for(const s of ['N','E','S','W']){ const lv=t.cover[s]; if(lv){ inner+=`<span class="cv ${s} ${lv===2?'full':'half'}">${lv===2?'▣':'▢'}</span>`; } }
+    el.innerHTML=inner;
+  }
+  // walls overlay (full edges) — draw thick segments
+  drawWalls();
+  // occupants
+  const shootMode = selected && mode==='shoot';
+  for(const u of units){ const e=occEls[u.id]; if(!e) continue;
+    if(!u.alive){ e.o.style.display='none'; e.dispC=u.c; e.dispR=u.r; continue; }
+    if(u.side==='enemy' && !visibleSet.has(u.c+','+u.r)){ e.o.style.display='none'; e.dispC=u.c; e.dispR=u.r; continue; } // unseen enemies stay hidden (snap disp so they don't "teleport-walk" when revealed)
+    e.o.style.display='flex';
+    e.o.style.zIndex = 5 + depthOf(u); // nearer rows draw over farther ones (rotation-aware; matters in 2.5D)
+    if(e.walking){ /* the walker owns position until it arrives */ }
+    else if(e.dispC!==u.c || e.dispR!==u.r){ startWalk(e,u); }
+    else { e.o.style.left=(u.c*T)+'px'; e.o.style.top=(u.r*T)+'px'; }
+    let cls='occ '+u.side+(u===selected?' sel':'')+(u.overwatch?' ow':'')+(u.hunkered?' hunk':'')+(u.flying?' fly':'')+(u.side==='enemy'&&!u.awake?' dormant':'');
+    const badge=e.o.querySelector('.badge'); badge.style.display='none';
+    const mp=e.o.querySelector('.markpin'); if(mp) mp.style.display=u.marked?'block':'none';
+    if(shootMode && u.side==='enemy'){
+      if(canTarget(selected,u)){ cls+=' targetable'; if(pending&&pending.type==='shoot'&&pending.target===u) cls+=' pendingtgt';
+        badge.className='badge can'; badge.textContent=hitChance(selected,u)+'%'; badge.style.display='block'; }
+      else { cls+=' untargetable'; badge.className='badge cant'; badge.textContent=!inRange(selected,u)?'out of range':'no sight'; badge.style.display='block'; }
+    }
+    e.o.className=cls;
+    e.o.querySelector('.hpbar > i').style.width=(100*u.hp/u.maxHp)+'%';
+    const pips=e.o.querySelectorAll('.pips i'); pips.forEach((p,i)=>p.className=i<u.actions?'on':'');
+    const m=META(u); const gl=e.o.querySelector('.glyph'); if(gl){ gl.textContent=m.icon; gl.style.color=m.color; } const bs=e.o.querySelector('.base'); if(bs){ bs.style.background=m.color; }
+  }
+  renderPanel();
+  drawPath();
+  updateSceneryFog();
+  tutCheck();
+}
+let wallEls=[];
+function drawWalls(){
+  wallEls.forEach(w=>w.remove()); wallEls=[];
+  const seen=new Set();
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){ const t=grid[r][c];
+    if(!revealed.has(c+','+r)) continue; // don't reveal walls you haven't seen
+    const add=(side)=>{ const key=c+','+r+side; if(seen.has(key))return; seen.add(key);
+      const w=document.createElement('div'); w.className='wall';
+      if(side==='N'){ w.style.left=(c*T)+'px'; w.style.top=(r*T-1)+'px'; w.style.width=T+'px'; w.style.height='3px'; }
+      if(side==='S'){ w.style.left=(c*T)+'px'; w.style.top=(r*T+T-2)+'px'; w.style.width=T+'px'; w.style.height='3px'; }
+      if(side==='E'){ w.style.left=(c*T+T-2)+'px'; w.style.top=(r*T)+'px'; w.style.width='3px'; w.style.height=T+'px'; }
+      if(side==='W'){ w.style.left=(c*T-1)+'px'; w.style.top=(r*T)+'px'; w.style.width='3px'; w.style.height=T+'px'; }
+      board.appendChild(w); wallEls.push(w);
+    };
+    if(t.cover.N===2)add('N'); if(t.cover.S===2)add('S'); if(t.cover.E===2)add('E'); if(t.cover.W===2)add('W');
+  }
+}
+function validTargets(u){ return units.filter(t=>canTarget(u,t)); }
+
+function renderPanel(){
+  let tf = phase==='player'?'Your turn — <b>act</b>':phase==='enemy'?'Enemy turn…':'';
+  if(mission){ tf = `<div style="color:#e0b257">◆ ${mission.name}</div>`
+    + (mission.key==='rite' ? (mission.riteBroken?'<div style="color:#9bffb0">Rite broken ✓</div>':`<div style="color:#ff8aa8">⏳ rite completes in ${mission.riteLeft}</div>`) : '')
+    + (mission.key==='hold' ? `<div style="color:#9bd0ff">🛡 hold ${mission.holdLeft} more turn${mission.holdLeft===1?'':'s'}</div>` : '')
+    + `<div>${tf}</div>`; }
+  document.getElementById('turnflag').innerHTML = tf;
+  const sc=document.getElementById('selcard');
+  if(selected){ const u=selected;
+    sc.innerHTML=`<span class="nm">${u.cls}</span>${u.flying?' ✦':''} · HP ${u.hp}/${u.maxHp} · aim ${u.aim}<div class="meta">`+
+      `${u.weapon.name} (${u.weapon.dmgMin}-${u.weapon.dmgMax}${u.dmgBonus?'+'+u.dmgBonus:''}, best @${u.weapon.optimalRange}) · mob ${u.mobility} · crit ${u.crit}%`+
+      `${u.grenades?` · 💣${u.grenades}`:''}${u.heals?` · ✚${u.heals}`:''}${u.marks?` · ◎${u.marks}`:''}${u.rallies?` · ⚑${u.rallies}`:''}${u.sureShots?` · sure ${u.sureShots}`:''} · act ${u.actions}${u.hunkered?' · HUNK':''}${u.overwatch?' · OW':''}</div>`+
+      `<div class="meta">Rank ${u.rank} · Humanity ${u.humanity} · Taint ${u.taint}${eligibleToPromote(u)?' · <span style="color:#ffd34a">★ CAN ADVANCE</span>':''}</div>`;
+  } else sc.textContent='No unit selected. Click a soldier (bottom-left).';
+  renderActs();
+  renderConfirm();
+  renderPromote();
+}
+function renderPromote(){
+  const el=document.getElementById('promote');
+  if(!selected || phase!=='player' || !eligibleToPromote(selected)){ el.style.display='none'; return; }
+  el.style.display='flex';
+  const rk=TREES[selected.cls][selected.rank];
+  const optHtml=(o)=>`<button class="popt ${o.graft?'graft':''}" data-id="${o.id}"><b>${o.name}</b>${o.graft?' <span class="tg">GRAFT · Taint +'+(o.taint||20)+'</span>':o.human?' <span style="color:#9bd0ff;font-size:10px">human</span>':''}<br><span class="pd">${o.desc}</span></button>`;
+  el.innerHTML=`<div class="ptitle">★ ${nm(selected)} can advance — ${rk.label}:</div>${optHtml(rk.A)}${optHtml(rk.B)}`;
+  el.querySelectorAll('.popt').forEach(b=>{ b.onclick=()=>{ const o=(rk.A.id===b.dataset.id)?rk.A:rk.B; applyPick(selected,o); }; });
+}
+function renderConfirm(){
+  const el=document.getElementById('confirm');
+  if(!pending||!selected){ el.style.display='none'; return; }
+  el.style.display='flex';
+  let q='', label='', danger=false;
+  if(pending.type==='move'){ q=`Move <b>${selected.cls}</b> to (${pending.c},${pending.r})?`; label='✓ Move'; }
+  else if(pending.type==='shoot'){ const t=pending.target; q=`Fire at <b>${t.cls}</b> — <b>${hitChance(selected,t)}%</b> hit · crit ${critChance(selected,t)}% · dmg ${selected.weapon.dmgMin}–${selected.weapon.dmgMax}${isFlanked(selected,t)?' · <span style="color:#ffd34a">FLANKED</span>':''}`; label='🔫 Fire'; }
+  else if(pending.type==='grenade'){ q=`Throw grenade at (${pending.c},${pending.r})? radius 1 · 4–7 dmg · destroys cover · <b>${selected.grenades-1}</b> left`; label='💥 Throw'; }
+  else if(pending.type==='overwatch'){ q=`Set <b>${selected.cls}</b> on Overwatch — fires at the first enemy that moves in sight. (ends turn)`; label='◔ Overwatch'; }
+  else if(pending.type==='hunker'){ q=`<b>${selected.cls}</b> Hunker Down — cover doubled, can't be crit. (ends turn)`; label='▲ Hunker'; }
+  else if(pending.type==='heal'){ q=`<b>${selected.cls}</b> patch up <b>${pending.target.cls}</b> (+${Math.min(HEAL_AMOUNT,pending.target.maxHp-pending.target.hp)} HP)? (ends turn)`; label='✚ Heal'; }
+  else if(pending.type==='rally'){ q=`<b>${selected.cls}</b> rally <b>${pending.target.cls}</b> — grant it a free action? (ends turn)`; label='⚑ Rally'; }
+  else if(pending.type==='mark'){ q=`<b>${selected.cls}</b> Mark <b>${pending.target.cls}</b> — strips its cover & evasion for the whole squad. (ends turn)`; label='◎ Mark'; }
+  el.innerHTML=`<div class="q">${q}</div><div class="row"><button class="go">${label}</button><button class="no">Cancel</button></div>`;
+  el.querySelector('.go').onclick=confirmPending;
+  el.querySelector('.no').onclick=cancelPending;
+}
+function renderActs(){
+  const box=document.getElementById('acts'); box.innerHTML='';
+  const mk=(label,on,dis,fn,extra='')=>{ const b=document.createElement('button'); b.className='act'+(on?' on':'')+extra; b.textContent=label; b.disabled=dis; if(!dis)b.onclick=fn; box.appendChild(b); return b; };
+  const u=selected, mine = u&&u.side==='player'&&phase==='player';
+  mk('Move', mode==='move', !mine||u.actions<1, ()=>setMode('move'));
+  mk('Shoot', mode==='shoot', !mine||!canShoot(u), ()=>setMode('shoot'));
+  mk('Overwatch', pending&&pending.type==='overwatch', !mine||u.actions<1||u.shotThisTurn, ()=>{ pending={type:'overwatch'}; mode='idle'; render(); });
+  mk('Hunker', pending&&pending.type==='hunker', !mine||u.actions<1, ()=>{ pending={type:'hunker'}; mode='idle'; render(); });
+  if(u&&u.grenades>0) mk('Grenade'+` (${u.grenades})`, mode==='grenade', !mine||u.actions<1, ()=>setMode('grenade'));
+  if(u&&u.heals>0) mk('Heal'+` (${u.heals})`, mode==='heal', !mine||u.actions<1, ()=>setMode('heal'));
+  if(u&&u.rallies>0) mk('Rally'+` (${u.rallies})`, mode==='rally', !mine||u.actions<1, ()=>setMode('rally'));
+  if(u&&u.marks>0) mk('Mark'+` (${u.marks})`, mode==='mark', !mine||u.actions<1||!canShoot(u), ()=>setMode('mark'));
+  mk('End Turn ▸', false, phase!=='player', ()=>endPlayerTurn(), ' end');
+  mk('Restart', false, false, ()=>newGame(), ' restart');
+}
+
+// ───────── input ─────────
+function canShoot(u){ return u && !u.shotThisTurn && (u.actions>=1 || u.cls==='Outrider'); }
+function clearPath(){ movePathSet=new Set(); movePathEnd=''; }
+// Selecting a soldier defaults straight into MOVE (reachable tiles light up); you still hover to
+// preview the route and must Confirm. If it can't move (no actions / not your turn), fall back to idle.
+function selectUnit(u){ selected=u; pending=null; clearPath(); mode=(u&&u.side==='player'&&phase==='player'&&u.actions>0)?'move':'idle'; setPreview(''); render(); }
+function setMode(m){ pending=null; clearPath(); mode = (mode===m)?'idle':m; setPreview(''); render(); }
+function onTileClick(c,r){
+  if(phase!=='player') return;
+  const u=unitAt(c,r);
+  // support modes target your OWN units — handle BEFORE reselect
+  if(selected && (mode==='heal'||mode==='rally')){
+    if(u && validSupport(selected,u,mode)){ pending={type:mode,target:u}; render(); return; }
+  }
+  // clicking one of your soldiers always (re)selects it and clears any pending choice
+  if(u&&u.side==='player'){ selectUnit(u); return; }
+  if(!selected) return;
+  // clicking a valid target/destination ARMS a pending action — it does not commit until you Confirm
+  if(mode==='move'){ if(reachable(selected)[c+','+r]!==undefined){ pending={type:'move',c,r}; movePathSet=pathSetTo(selected,c,r); movePathEnd=c+','+r; render(); } return; }
+  if(mode==='shoot'){ const tgt=unitAt(c,r); if(tgt&&canTarget(selected,tgt)){ pending={type:'shoot',target:tgt}; showShotPreview(selected,tgt); render(); } return; }
+  if(mode==='mark'){ const tgt=unitAt(c,r); if(tgt&&canTarget(selected,tgt)){ pending={type:'mark',target:tgt}; render(); } return; }
+  if(mode==='grenade'){ if(cheb(selected,{c,r})<=6 && hasLOS(selected,{c,r})){ pending={type:'grenade',c,r}; render(); } return; }
+}
+function confirmPending(){ if(!pending||phase!=='player'||!selected) return; const p=pending; pending=null;
+  if(p.type==='move') moveUnit(selected,p.c,p.r);
+  else if(p.type==='shoot') playerShoot(selected,p.target);
+  else if(p.type==='grenade') playerGrenade(selected,p.c,p.r);
+  else if(p.type==='overwatch') act_overwatch(selected);
+  else if(p.type==='hunker') act_hunker(selected);
+  else if(p.type==='heal') doHeal(selected,p.target);
+  else if(p.type==='rally') doRally(selected,p.target);
+  else if(p.type==='mark') doMark(selected,p.target);
+}
+function cancelPending(){ pending=null; clearPath(); setPreview(''); render(); }
+function onTileHover(c,r){
+  if(!selected) return;
+  if(mode==='move'){ if(!pending && reachable(selected)[c+','+r]!==undefined){ movePathSet=pathSetTo(selected,c,r); movePathEnd=c+','+r; render(); } return; }
+  if(mode==='shoot'){ const t=unitAt(c,r); if(t&&canTarget(selected,t)) showShotPreview(selected,t); }
+  else if(mode==='grenade'){ if(cheb(selected,{c,r})<=6) setPreview(`<span class="big">Grenade</span> → (${c},${r})<br>radius 1 · 4–7 dmg · destroys cover`); }
+}
+function showShotPreview(s,t){
+  const hit=hitChance(s,t), crit=critChance(s,t), fl=isFlanked(s,t), cl=activeCoverFor(t,s);
+  const tag = fl? '<span class="flank">FLANKED</span>' : cl===2?'<span class="cov">full cover</span>':cl===1?'<span class="cov">half cover</span>':'open';
+  setPreview(`<span class="big">${hit}%</span> to hit · crit ${crit}% · dmg ${s.weapon.dmgMin}–${s.weapon.dmgMax} · ${tag}<br><span style="color:#8a90a8">vs ${t.cls} · range ${cheb(s,t)}</span>`);
+}
+function setPreview(html){ document.getElementById('preview').innerHTML = html||'Hover a target to see the odds.'; }
+
+function moveUnit(u,c,r){
+  const from={c:u.c,r:u.r};
+  u.c=c; u.r=r; u.movedThisTurn=true; u.actions--; clearPath();
+  triggerOverwatch(u, from, {c,r});
+  if(u.actions<1 || !canShoot(u)) { /* stays selected */ }
+  mode='idle'; setPreview(''); render();
+  if(scatterWoken()) render();   // a pod we just revealed/approached scrambles for cover
+  checkEnd();
+}
+function playerShoot(u,t){ resolveShot(u,t); u.shotThisTurn=true; u.actions=0; mode='idle'; setPreview(''); render(); checkEnd(); }
+function playerGrenade(u,c,r){ doGrenade(u,c,r); u.shotThisTurn=true; u.actions=0; mode='idle'; setPreview(''); render(); checkEnd(); }
+function act_overwatch(u){ u.overwatch=true; u.actions=0; u.shotThisTurn=true; log('l',`${nm(u)} sets Overwatch.`); mode='idle'; render(); }
+function act_hunker(u){ u.hunkered=true; u.actions=0; log('l',`${nm(u)} hunkers down.`); mode='idle'; render(); }
+// ── support actions (Sawbones Heal, Bannerman Rally) ──
+const SUPPORT_RANGE=6;
+function validSupport(u,ally,m){ return ally && ally.side===u.side && ally!==u && ally.alive && cheb(u,ally)<=SUPPORT_RANGE && hasLOS(u,ally) && (m!=='heal'||ally.hp<ally.maxHp); }
+function doHeal(u,t){ const amt=Math.min(HEAL_AMOUNT+(u.healBonus||0),t.maxHp-t.hp); t.hp+=amt; u.heals--; u.actions=0; u.shotThisTurn=true; flashAttack(u); flashHit(t); floatText(t,'+'+amt,'heal'); log('g',`${nm(u)} patches up ${nm(t)} (+${amt}).`); bark('h','Handler: Stay with me — you\'re alright.','mara-heal-a'); if(window.Snd)Snd.sfx('heal'); mode='idle'; render(); checkEnd(); }
+function doRally(u,t){ t.actions+=1; u.rallies--; u.actions=0; u.shotThisTurn=true; flashAttack(u); floatText(t,'RALLY','rally'); log('g',`${nm(u)} rallies ${nm(t)} — a free action!`); bark('h','Handler: On me! Move!','tom-rally-a'); mode='idle'; render(); }
+function doMark(u,t){ t.marked=true; u.marks--; u.actions=0; u.shotThisTurn=true; flashAttack(u); floatText(t,'MARKED','rally'); log('g',`${nm(u)} marks ${nm(t)} — no cover, nowhere to fly.`); bark('h','Spotter: Marked. Put it down.','wren-mark-a'); mode='idle'; render(); }
+// ── promotion / skill trees ──
+function eligibleToPromote(u){ return u && u.side==='player' && TREES[u.cls] && u.rank < TREES[u.cls].length && u.kills > u.rank; }
+function applyPick(u, opt){
+  opt.apply(u); u.picks.push(opt.id); u.rank++;
+  if(opt.graft){ u.taint += (opt.taint||20); u.humanity = Math.max(0, u.humanity + (opt.hum||-15));
+    log('b', `${nm(u)} takes the graft — ${opt.name}. Something human gives way. (Taint ${u.taint}, Humanity ${u.humanity})`);
+    bark('h','Spotter: ...you sure about carrying that inside you?','spotter-promote-graft');
+  } else { log('g', `${nm(u)} advances — ${opt.name}.`); bark('h','Spotter: Earned it. Good.','spotter-promote-human'); }
+  render();
+}
+
+// ───────── overwatch ─────────
+function triggerOverwatch(mover, from, to){
+  const path=lineCells(from,to);
+  for(const cell of path){
+    for(const w of units){ if(!w.alive||w.side===mover.side||!w.overwatch) continue;
+      const probe={c:cell.c,r:cell.r};
+      if(inRange(w,probe) && hasLOS(w,probe)){
+        w.overwatch=false;
+        const saved={c:mover.c,r:mover.r}; mover.c=cell.c; mover.r=cell.r; // resolve at the crossing cell
+        resolveShot(w,mover,{overwatch:true,moved:false});
+        if(!mover.alive){ render(); return; }
+        mover.c=saved.c; mover.r=saved.r;
+      }
+    }
+  }
+}
+
+// ───────── turn flow ─────────
+let phase='player';
+function resetForTurn(side){ for(const u of living(side)){ u.actions=2; u.movedThisTurn=false; u.shotThisTurn=false; u.overwatch=false; u.hunkered=false; if(u.regen){ u.hp=Math.min(u.maxHp,u.hp+u.regen); } } }
+function endPlayerTurn(){ if(phase!=='player') return; phase='enemy'; selected=null; mode='idle'; pending=null; render(); setTimeout(enemyTurn, 400); }
+function enemyTurn(){
+  resetForTurn('enemy');
+  // pressure objective: the rite advances each enemy turn until the Caster(s) are dead
+  if(mission && mission.key==='rite' && !mission.riteBroken){
+    if(living('enemy').filter(e=>e.cls==='Caster').length===0){ mission.riteBroken=true; log('g','The chanting falters and dies — the rite is broken.'); bark('h','Spotter: That\'s it, the chant\'s done. Now clean up.','spotter-rite-break'); }
+    else { mission.riteLeft--; log('b',`The rite swells — ${mission.riteLeft} turn${mission.riteLeft===1?'':'s'} until it completes.`);
+      if(mission.riteLeft<=0){ phase='over'; banner('lose','THE RITE COMPLETED'); bark('h','Spotter: Too late — it\'s through. Pull back!','spotter-rite-lose'); render(); finishMission(false); return; } }
+  }
+  // pressure objective (Hold): survive a set number of enemy turns until relief
+  if(mission && mission.key==='hold' && !mission.resolved){
+    mission.holdLeft--;
+    if(mission.holdLeft<=0){ phase='over'; banner('win','LINE HELD'); bark('h','Spotter: That\'s the relief horn — we held the cut. Good work.','spotter-hold-win'); render(); finishMission(true); return; }
+    log('h',`Hold — ${mission.holdLeft} turn${mission.holdLeft===1?'':'s'} until relief.`);
+  }
+  const acting=living('enemy').filter(e=>e.awake);   // dormant pods don't act until spotted
+  let i=0;
+  const step=()=>{ if(i>=acting.length){ phase='player'; resetForTurn('player'); render(); checkEnd(); return; }
+    const e=acting[i++]; if(!e.alive){ step(); return; }
+    aiAct(e); render();
+    if(checkEnd()) return;
+    setTimeout(step, 1100);   // pace enemies so each one's (now slower) move is readable, not a simultaneous blur
+  };
+  setTimeout(step, 450);
+}
+
+// ───────── enemy AI ─────────
+function bestShotFrom(e, c, r){ // returns {target,hit,flank} best at position (c,r)
+  const probe={c,r,cls:e.cls,weapon:e.weapon,aim:e.aim,crit:e.crit,critAtRange:e.critAtRange,side:e.side,flying:e.flying};
+  let best=null;
+  for(const t of living('player')){ if(!inRange(probe,t)||!hasLOS(probe,t)) continue;
+    const hit=hitChance(probe,t,{moved:(c!==e.c||r!==e.r)}); const flank=isFlanked(probe,t); const lethal=(()=>{ // rough lethal check at avg dmg
+      const avg=Math.round((e.weapon.dmgMin+e.weapon.dmgMax)/2); return avg>=t.hp; })();
+    const score=hit+(flank?30:0)+(lethal&&hit>=50?100:0);
+    if(!best||score>best.score) best={target:t,hit,flank,lethal,score};
+  }
+  return best;
+}
+function aiAct(e){
+  // 1. shoot from here if good
+  let here=bestShotFrom(e,e.c,e.r);
+  if(here && (here.lethal&&here.hit>=50 || here.flank || here.hit>=TUNING.AI.openThresh)){
+    e.movedThisTurn=false; resolveShot(e,here.target); e.shotThisTurn=true; e.actions=0; return;
+  }
+  // caster hex-bolt on clustered/half-covered players
+  if(e.cls==='Caster' && e.acidLob>0){
+    for(const t of living('player')){ if(inRange(e,t)&&hasLOS(e,t)&&activeCoverFor(t,e)===1){ doAcidLob(e,t.c,t.r); e.actions=0; e.shotThisTurn=true; return; } }
+  }
+  // 2. reposition: score reachable tiles
+  const reach=reachable(e); let bestTile=null;
+  for(const k in reach){ const [c,r]=k.split(',').map(Number); const steps=reach[k];
+    // cover vs nearest player
+    const np=living('player').reduce((m,p)=>{ const d=cheb({c,r},p); return d<m.d?{d,p}:m; },{d:1e9,p:null});
+    const probe={c,r,cover:true};
+    const cov = np.p? activeCoverFor({c,r,cover:coverAt(c,r)}, np.p):0;
+    const shot=bestShotFrom(e,c,r);
+    let score = TUNING.AI.coverW*cov + (shot? shot.hit + (shot.flank?TUNING.AI.flankBonus:0):0) - TUNING.AI.stepCost*steps + 8*(grid[r][c].elevation||0);
+    // penalize tiles where any player flanks this position
+    let selfFlanked=false; for(const p of living('player')){ if(hasLOS(p,{c,r}) && activeCoverFor({c,r},p)===0){ selfFlanked=true; break; } }
+    if(selfFlanked) score-=TUNING.AI.selfFlankPenalty;
+    if(!bestTile||score>bestTile.score) bestTile={c,r,score,steps};
+  }
+  if(bestTile){ const from={c:e.c,r:e.r}; e.c=bestTile.c; e.r=bestTile.r; e.movedThisTurn=true; e.actions--; triggerOverwatch(e,from,{c:e.c,r:e.r}); if(!e.alive) return; }
+  // 3. after moving: shoot or overwatch
+  const shot=bestShotFrom(e,e.c,e.r);
+  if(shot && shot.hit>=TUNING.AI.shootThresh){ resolveShot(e,shot.target); e.shotThisTurn=true; e.actions=0; }
+  else { e.overwatch=true; e.actions=0; log('l',`${nm(e)} goes on overwatch.`); }
+}
+
+// ───────── win/lose ─────────
+function checkEnd(){
+  if(mission && mission.key==='rite' && !mission.riteBroken && living('enemy').filter(e=>e.cls==='Caster').length===0){ mission.riteBroken=true; log('g','The chanting falters and dies — the rite is broken.'); }
+  if(living('enemy').length===0){ phase='over'; banner('win','SECTOR CLEARED'); bark('h','Handler: All hostiles down. Clean work, team.','handler-cleared'); if(window.Snd)Snd.sfx('wave-clear'); render(); finishMission(true); return true; }
+  if(living('player').length===0){ phase='over'; banner('lose','SQUAD WIPED'); bark('h','Handler: Squad\'s gone... falling back.','handler-wiped'); render(); finishMission(false); return true; }
+  return false;
+}
+function banner(kind,txt){ const b=document.getElementById('banner'); b.className='banner '+kind; b.textContent=txt; }
+function renderDiff(){ const el=document.getElementById('diffrow'); if(!el) return;
+  el.innerHTML='<span>Difficulty:</span>'+Object.keys(DIFFICULTY).map(k=>`<button class="${k===difficulty?'on':''}" onclick="setDifficulty('${k}')">${k}</button>`).join('')
+    +'<span style="margin-left:12px">Mission:</span>'+Object.keys(MISSIONS).map(k=>`<button class="${k===missionKey?'on':''}" onclick="setMission('${k}')" title="${MISSIONS[k].desc}">${MISSIONS[k].name.split(' ')[0]}</button>`).join('')
+    +`<span style="margin-left:12px">Seed:</span><input id="seedval" value="${SEED}"><button onclick="newGame()">↻ new</button>`
+    +`<span style="margin-left:12px">View:</span><button class="${tiltOn?'on':''}" onclick="toggleTilt()" title="Angle the battlefield (2.5D)">▦ 2.5D</button>`
+    +`<button onclick="rotateView()" title="Rotate the battlefield 90°">⟳ ${viewRot}°</button>`;
+}
+
+// ───────── fx / log ─────────
+function nm(u){ return (u.side==='player'?'':'')+u.cls; }
+function flashHit(u){ const e=occEls[u.id]; if(e){ e.o.classList.add('hit'); setTimeout(()=>e.o.classList.remove('hit'),300); } }
+function flashAttack(u){ u.state='attack'; u.stateTimer=Date.now()+700; }
+function floatText(u,text,cls){ const d=document.createElement('div'); d.className='floater '+cls; d.textContent=text; d.style.left=(u.c*T+T/2)+'px'; d.style.top=(u.r*T+T/2-8)+'px'; board.appendChild(d); setTimeout(()=>d.remove(),1000); }
+function tracer(a,b,cls){ const x1=a.c*T+T/2,y1=a.r*T+T/2,x2=b.c*T+T/2,y2=b.r*T+T/2; const len=Math.hypot(x2-x1,y2-y1)||1; const ang=Math.atan2(y2-y1,x2-x1)*180/Math.PI; const d=document.createElement('div'); d.className='tracer '+cls; d.style.left=x1+'px'; d.style.top=y1+'px'; d.style.width=len+'px'; d.style.transform='rotate('+ang+'deg)'; board.appendChild(d); setTimeout(()=>d.remove(),330); }
+function log(cls,msg){ const l=document.getElementById('log'); const d=document.createElement('div'); d.className='l '+cls; d.textContent=msg; l.prepend(d); }
+function bark(cls,msg,vo){ log(cls,msg); if(window.Snd&&vo) Snd.vo(vo); }
+// ───────── audio engine: sfx + voice-over + looping music (all graceful — missing files just no-op) ─────────
+const Snd=(function(){
+  let muted=localStorage.getItem('rwt-mute')==='1', unlocked=false, voEl=null, musicEl=null, musicPath='', musicBase=0.32;
+  let vols={music:1,sfx:1,voice:1}; try{ Object.assign(vols, JSON.parse(localStorage.getItem('rwt-vol')||'{}')); }catch(e){}
+  const sfx=(name,vol)=>{ if(muted)return; try{ const a=new Audio('audio/sfx/'+name+'.mp3'); a.volume=(vol==null?0.55:vol)*vols.sfx; a.play().catch(()=>{}); }catch(e){} };
+  const voFix=(id)=>{ // reconcile manifest ids with the audio instance's actual filenames
+    if(id==='handler-cleared') return 'handler-sector-cleared-1';
+    if(id==='handler-wiped') return 'handler-squad-wiped-1';
+    const m=id.match(/^spotter-tut-0*(\d+)$/); if(m) return 'spotter-tutorial-'+m[1];
+    return id.replace(/-([abc])$/,(s,l)=>'-'+({a:1,b:2,c:3}[l])); };
+  const vo=(id,vol)=>{ if(muted||!id)return; try{ if(!voEl)voEl=new Audio(); voEl.pause(); const cands=[...new Set([voFix(id), id+'-1', id])]; let i=0; const go=()=>{ if(i>=cands.length){ voEl.onerror=null; return; } voEl.onerror=()=>{ i++; go(); }; voEl.src='audio/vo/'+cands[i]+'.mp3'; voEl.volume=(vol==null?0.95:vol)*vols.voice; voEl.play().catch(()=>{}); }; go(); }catch(e){} };
+  const music=(path,vol)=>{ if(path===musicPath){ if(musicEl)musicEl.muted=muted; return; } musicPath=path; musicBase=vol==null?0.32:vol; try{ if(musicEl)musicEl.pause(); if(!path){musicEl=null;return;} musicEl=new Audio(path); musicEl.loop=true; musicEl.volume=musicBase*vols.music; musicEl.muted=muted; if(unlocked)musicEl.play().catch(()=>{}); }catch(e){} };
+  const setMute=(m)=>{ muted=m; localStorage.setItem('rwt-mute',m?'1':'0'); if(musicEl){musicEl.muted=m; if(!m&&unlocked)musicEl.play().catch(()=>{});} };
+  const setVol=(ch,v)=>{ vols[ch]=v; localStorage.setItem('rwt-vol',JSON.stringify(vols)); if(ch==='music'&&musicEl) musicEl.volume=musicBase*v; };
+  const unlock=()=>{ if(unlocked)return; unlocked=true; if(musicEl&&!muted)musicEl.play().catch(()=>{}); removeEventListener('pointerdown',unlock); removeEventListener('keydown',unlock); };
+  addEventListener('pointerdown',unlock); addEventListener('keydown',unlock);
+  const mount=()=>{
+    const wrap=document.createElement('div'); wrap.style.cssText='position:fixed;top:10px;right:12px;z-index:200;font-family:system-ui';
+    const gear=document.createElement('button'); gear.textContent='⚙'; gear.title='Audio & tutorial settings';
+    gear.style.cssText='width:34px;height:30px;border:1px solid #5a4a2a;background:#1b140bdd;color:#e8d9bf;border-radius:6px;font-size:15px;cursor:pointer';
+    const panel=document.createElement('div'); panel.style.cssText='display:none;position:absolute;top:36px;right:0;width:210px;background:#15100a;border:1px solid #5a4a2a;border-radius:8px;padding:12px 14px;box-shadow:0 8px 24px #000a;color:#e8d9bf;font-size:12px';
+    const mL=document.createElement('label'); mL.style.cssText='display:flex;align-items:center;gap:8px;margin:0 0 10px;cursor:pointer';
+    const mc=document.createElement('input'); mc.type='checkbox'; mc.checked=muted; mc.onchange=()=>setMute(mc.checked); mL.appendChild(mc); mL.appendChild(document.createTextNode('Mute all')); panel.appendChild(mL);
+    const row=(label,key)=>{ const d=document.createElement('div'); d.style.cssText='margin:7px 0;display:flex;align-items:center;gap:8px'; const l=document.createElement('span'); l.textContent=label; l.style.cssText='width:46px;color:#b9a986'; const s=document.createElement('input'); s.type='range'; s.min='0'; s.max='1'; s.step='0.05'; s.value=vols[key]; s.style.flex='1'; s.oninput=()=>setVol(key,parseFloat(s.value)); d.appendChild(l); d.appendChild(s); panel.appendChild(d); };
+    row('Music','music'); row('SFX','sfx'); row('Voice','voice');
+    const rt=document.createElement('button'); rt.textContent='↻ Replay tutorial'; rt.style.cssText='width:100%;margin-top:10px;padding:6px;border:1px solid #5a4a2a;background:#241a0c;color:#e8d9bf;border-radius:6px;cursor:pointer;font-size:12px';
+    rt.onclick=()=>{ if(window.resetTut)window.resetTut(); panel.style.display='none'; if(typeof log==='function')log('h','Spotter: From the top, then.'); if(typeof uiScreen!=='undefined'&&uiScreen==='combat'&&typeof tutCheck==='function')tutCheck(); };
+    panel.appendChild(rt);
+    gear.onclick=(e)=>{ e.stopPropagation(); panel.style.display=panel.style.display==='none'?'block':'none'; mc.checked=muted; };
+    document.addEventListener('click',(e)=>{ if(!wrap.contains(e.target)) panel.style.display='none'; });
+    wrap.appendChild(gear); wrap.appendChild(panel); document.body.appendChild(wrap);
+  };
+  if(document.body)mount(); else addEventListener('DOMContentLoaded',mount);
+  return { sfx, vo, music, setMute, setVol, isMuted:()=>muted };
+})();
+window.Snd=Snd;
+// ───────── spoken tutorial: first-time, state-driven hints (once ever; speaks via VO when rendered) ─────────
+const TUT_LINES={
+ 1:"Six of us against whatever crossed the Rim tonight. Pick a trooper — click one, bottom-left.",
+ 10:"Job tonight's simple: every hostile that crossed, put it down. Simple ain't the same as easy.",
+ 2:"Two actions a turn, each one. Spend 'em like they're your last — out here they might be.",
+ 3:"Lit tiles are where they can reach. Click one to move, then Confirm. No takin' it back.",
+ 4:"Those shields on the tile edges are cover — half throws off their aim, full blocks the shot cold. Live behind it.",
+ 5:"Hover a target for your odds. Get 'round their cover for a flank — no defense, and it stings extra.",
+ 6:"That's the dice. Frontier doesn't owe you the hit. Reset, find a cleaner angle.",
+ 7:"Overwatch sets a trap — first thing that moves in your sights, you drop it.",
+ 8:"High ground's worth climbing — better aim, and it strips a level off their cover.",
+ 9:"You're spent — end the turn, and it's their move. Watch the dark.",
+ 11:"They'll take hits. Sawbones can patch 'em mid-fight — keep her close, keep her alive.",
+ 12:"That's the shape of it. The rest you'll learn the hard way. Everybody does."
+};
+let TUT_SEEN=new Set(); try{ TUT_SEEN=new Set(JSON.parse(localStorage.getItem('rwt-tut')||'[]')); }catch(e){}
+let tutDone=localStorage.getItem('rwt-tut-done')==='1';
+function tut(n){ if(tutDone||TUT_SEEN.has(n)||!TUT_LINES[n])return; TUT_SEEN.add(n); try{localStorage.setItem('rwt-tut',JSON.stringify([...TUT_SEEN]));}catch(e){}
+  log('h','Spotter: '+TUT_LINES[n]); if(window.Snd) Snd.vo('spotter-tut-'+String(n).padStart(2,'0'));
+  if(n===12){ tutDone=true; localStorage.setItem('rwt-tut-done','1'); } }
+function tutCheck(){ if(tutDone||uiScreen!=='combat'||!units)return;
+  const P=u=>u.side==='player'&&u.alive;
+  const conds=[ [1,true],[10,TUT_SEEN.has(1)],[2,!!selected],[3,mode==='move'],
+    [4,units.some(u=>u.side==='player'&&u.movedThisTurn)],[5,mode==='shoot'],
+    [7,units.some(u=>P(u)&&u.overwatch)],[8,grid&&units.some(u=>P(u)&&(grid[u.r][u.c].elevation||0)>0)],
+    [9,phase==='enemy'],[11,units.some(u=>P(u)&&u.hp<u.maxHp)],[12,TUT_SEEN.has(9)&&phase==='player'] ];
+  for(const [n,ok] of conds){ if(ok && !TUT_SEEN.has(n)){ tut(n); break; } }  // one beat per check → paced, no VO overlap
+}
+window.resetTut=()=>{ localStorage.removeItem('rwt-tut'); localStorage.removeItem('rwt-tut-done'); TUT_SEEN=new Set(); tutDone=false; };
+
+// ───────── animation ─────────
+let tick=0;
+function animate(){ tick++;
+  for(const u of (units||[])){ if(!u.alive) continue; const e=occEls[u.id]; if(!e) continue;
+    let st=u.state;
+    if(u.state==='attack' && Date.now()>u.stateTimer) u.state='idle';
+    const fset=frames[u.spriteKind]?.[u.state] || frames[u.spriteKind]?.idle;
+    if(fset&&fset.length){ const img=fset[tick%fset.length]; if(img) e.img.src=img.src; }
+  }
+  setTimeout(animate,120);
+}
+
+// ───────── boot ─────────
+function newGame(){
+  SEED = (document.getElementById('seedval')?.value|0) || SEED;
+  rng=createRng(SEED);
+  applyDifficulty();
+  revealed=new Set(); visibleSet=new Set();
+  layout(); initUnits(); selected=null; mode='idle'; pending=null; phase='player';
+  mission = Object.assign({ key:missionKey, riteLeft: MISSIONS[missionKey].riteTurns||0, riteBroken:false, holdLeft: MISSIONS[missionKey].holdTurns||0, resolved:false }, MISSIONS[missionKey]);
+  document.getElementById('banner').className='banner';
+  document.getElementById('log').innerHTML='';
+  buildBoard(); render(); renderDiff();
+  if(mission.key==='rite') bark('h',`Spotter: Something's chanting out past the rocks [${difficulty}]. Find the Caster and put it down before the rite finishes — ${mission.riteLeft} turns.`,'spotter-rite-deploy');
+  else bark('h',`Spotter: Hostiles came through the Rim [${difficulty}]. Advance careful — keep to cover, mind your flanks.`,'spotter-hunt-deploy');
+}
+loadAllSprites().then(()=>{ if(!loadCamp()) camp=freshCamp(); animate(); setScreen('frontier'); });
+
+// ───────── debug api ─────────
+function protoUnit(clsName){ const def=PLAYER_CLASSES[clsName]||ENEMY_CLASSES[clsName]; return { cls:clsName, aim:def.aim, crit:def.crit, critAtRange:def.critAtRange||0, weapon:def.weapon }; }
+window.DBG = {
+  hitMath, critMath, hitChance, critChance, isFlanked, hasLOS, activeCoverFor, reachable, elevOf, units:()=>units, grid:()=>grid, TUNING,
+  testHit:(clsName,dist,coverLevel,opts={})=>hitMath(protoUnit(clsName),dist,coverLevel,opts.hunkered,opts.moved,opts.overwatch),
+  testCrit:(clsName,dist,flanked,hunkered)=>critMath(protoUnit(clsName),dist,flanked,hunkered),
+  u:(side,cls)=>units.find(x=>x.side===side&&x.cls===cls),
+  TREES, eligibleToPromote, scatterWoken, wakePod,
+  mission:()=>mission, setMission:(k)=>setMission(k),
+  camp:()=>camp, uiScreen:()=>uiScreen, setScreen:(s)=>setScreen(s), deployNext, endMission, advanceBuilding, craftShard, resetCamp,
+  grantKill:(side,cls)=>{ const x=units.find(u=>u.side===side&&u.cls===cls); x.kills++; return eligibleToPromote(x); },
+  promote:(cls,opt)=>{ const x=units.find(u=>u.side==='player'&&u.cls===cls); const rk=TREES[cls][x.rank]; applyPick(x, opt==='B'?rk.B:rk.A); return {rank:x.rank,humanity:x.humanity,taint:x.taint,picks:x.picks.slice(),aim:x.aim,mobility:x.mobility,sureShots:x.sureShots,flying:x.flying}; },
+  setSeed:(s)=>{ SEED=s; newGame(); },
+  state:()=>({phase, uiScreen, hp:(units||[]).map(u=>u.cls+(u.side==='enemy'?'(E)':'')+':'+ (u.alive?u.hp:'X')) }),
+};
+
+// ───────── battlefield camera: pan / zoom / follow (flat 2D over the 2.5D board) ─────────
+(function(){
+  const vp=document.getElementById('boardvp'), cam=document.getElementById('boardcam');
+  if(!vp||!cam) return;
+  const cs={s:1,tx:0,ty:0,MIN:0.55,MAX:2.6};
+  const vr=()=>vp.getBoundingClientRect();
+  function clamp(){ const r=vr(), bw=COLS*T*cs.s, bh=ROWS*T*cs.s, pad=150;
+    cs.tx = bw<=r.width ? (r.width-bw)/2 : Math.min(pad, Math.max(r.width-bw-pad, cs.tx));
+    cs.ty = bh<=r.height ? (r.height-bh)/2 : Math.min(pad, Math.max(r.height-bh-pad, cs.ty)); }
+  function apply(anim){ cam.style.transition=anim?'transform .22s ease-out':'none'; clamp(); cam.style.transform='translate('+cs.tx+'px,'+cs.ty+'px) scale('+cs.s+')'; }
+  function center(el,anim){ if(!el) return; const r=vr(), e=el.getBoundingClientRect(); cs.tx+=(r.left+r.width/2)-(e.left+e.width/2); cs.ty+=(r.top+r.height/2)-(e.top+e.height/2); apply(anim); }
+  function frameSquad(){ if(vr().width<10){ setTimeout(frameSquad,60); return; } cs.s=0.85; apply();
+    const ps=[].slice.call(document.querySelectorAll('.occ.player')); if(!ps.length){ apply(); return; }
+    const r=vr(); let x=0,y=0; ps.forEach(function(p){ const b=p.getBoundingClientRect(); x+=b.left+b.width/2; y+=b.top+b.height/2; }); x/=ps.length; y/=ps.length;
+    cs.tx+=(r.left+r.width/2)-x; cs.ty+=(r.top+r.height/2)-y; apply(true); }
+  function zoomAtCenter(f){ const r=vr(),mx=r.width/2,my=r.height/2,o=cs.s; cs.s=Math.min(cs.MAX,Math.max(cs.MIN,cs.s*f)); cs.tx=mx-(mx-cs.tx)*(cs.s/o); cs.ty=my-(my-cs.ty)*(cs.s/o); apply(true); }
+  vp.addEventListener('wheel',function(e){ e.preventDefault(); const r=vr(),mx=e.clientX-r.left,my=e.clientY-r.top,o=cs.s; cs.s=Math.min(cs.MAX,Math.max(cs.MIN,cs.s*(e.deltaY<0?1.12:0.89))); cs.tx=mx-(mx-cs.tx)*(cs.s/o); cs.ty=my-(my-cs.ty)*(cs.s/o); apply(); },{passive:false});
+  vp.addEventListener('contextmenu',function(e){ e.preventDefault(); });
+  let dg=false, panning=false, leftDown=false, justDragged=false, lx=0, ly=0, downX=0, downY=0;
+  vp.addEventListener('mousedown',function(e){
+    if(e.button===2){ dg=true; lx=e.clientX; ly=e.clientY; e.preventDefault(); }
+    else if(e.button===0){ leftDown=true; panning=false; lx=e.clientX; ly=e.clientY; downX=e.clientX; downY=e.clientY; }
+  });
+  window.addEventListener('mousemove',function(e){
+    if(dg){ cs.tx+=e.clientX-lx; cs.ty+=e.clientY-ly; lx=e.clientX; ly=e.clientY; apply(); return; }
+    if(leftDown){ if(!panning && (Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY))>5){ panning=true; vp.style.cursor='grabbing'; }
+      if(panning){ cs.tx+=e.clientX-lx; cs.ty+=e.clientY-ly; lx=e.clientX; ly=e.clientY; apply(); } }
+  });
+  window.addEventListener('mouseup',function(){ if(leftDown && panning) justDragged=true; dg=false; leftDown=false; vp.style.cursor=''; });
+  // a left-drag pan must NOT also fire a tile click/select — swallow the click that follows a drag
+  vp.addEventListener('click',function(e){ if(justDragged){ justDragged=false; e.stopPropagation(); e.preventDefault(); } }, true);
+  window.addEventListener('keydown',function(e){ if(typeof uiScreen!=='undefined'&&uiScreen!=='combat')return; const ae=document.activeElement; if(ae&&/INPUT|TEXTAREA/.test(ae.tagName))return; const k=e.key.toLowerCase(),st=48; let h=true; if(k==='w'||k==='arrowup')cs.ty+=st; else if(k==='s'||k==='arrowdown')cs.ty-=st; else if(k==='a'||k==='arrowleft')cs.tx+=st; else if(k==='d'||k==='arrowright')cs.tx-=st; else h=false; if(h){ e.preventDefault(); apply(); } });
+  const ctl=document.createElement('div'); ctl.className='camctl';
+  ctl.innerHTML='<button title="Zoom in">+</button><button title="Zoom out">−</button><button title="Frame the squad">◉</button>';
+  vp.appendChild(ctl);
+  ctl.children[0].onclick=function(){ zoomAtCenter(1.2); }; ctl.children[1].onclick=function(){ zoomAtCenter(1/1.2); }; ctl.children[2].onclick=function(){ frameSquad(); };
+  const hint=document.createElement('div'); hint.className='camhint'; hint.textContent='scroll = zoom · drag or WASD = pan'; vp.appendChild(hint);
+  window.RWCamera={ frameSquad:frameSquad, center:center, cs:cs, apply:apply };
+  // frame the squad whenever a battle builds; gently follow the selected soldier if it's off-screen
+  if(typeof buildBoard==='function'){ const _bb=buildBoard; buildBoard=function(){ const r=_bb.apply(this,arguments); setTimeout(function(){ try{ frameSquad(); }catch(e){} },40); return r; }; }
+  if(typeof selectUnit==='function'){ const _su=selectUnit; selectUnit=function(){ const r=_su.apply(this,arguments); requestAnimationFrame(function(){ try{ if(selected){ const o=document.getElementById('occ-'+selected.id); if(o){ const rr=vr(), er=o.getBoundingClientRect(); const inside=er.left>rr.left+14&&er.right<rr.right-14&&er.top>rr.top+14&&er.bottom<rr.bottom-14; if(!inside) center(o,true); } } }catch(e){} }); return r; }; }
+})();
+</script>
+</body>
+</html>
