@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "audio:sfx": "node scripts/audio/generate-sfx.mjs",
     "test:smoke": "node scripts/phaseg-smoke.mjs",
     "test:events": "node scripts/event-contract.mjs",
     "test:golden": "node scripts/phaseg-golden.mjs",

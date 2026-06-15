@@ -28,3 +28,4 @@ dist/
 
 # PixelLab API key — local only, never commit
 scripts/pixellab/.env
+scripts/audio/.env
