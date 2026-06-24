@@ -265,7 +265,7 @@ export function wardenDoctrine(threshold) {
         name: 'chip-and-build',
         when: always,
         skillId: 'frostnip',
-        select: biggestThreatEnemy,
+        select: focusFireEnemy,
       },
     ],
   };
@@ -284,6 +284,9 @@ export function hexerDoctrine(threshold) {
         skillId: 'blight',
         select: allEnemies,
       },
+      // Doom + Jinx target the biggest ATK threat: the vuln curse redirects the
+      // team's focusFireEnemy selector onto the cursed target (vuln > 0 → priority).
+      // This makes the Hexer effectively call which enemy the squad all converge on.
       {
         name: 'doom-the-threat',
         when: chargeAtLeast(threshold),
