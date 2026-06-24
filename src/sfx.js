@@ -111,6 +111,14 @@ export function ampStack() {
 
 // ── Run-phase sounds ────────────────────────────────────────────────────────
 
+export function forgeBuy() {
+  // Forge purchase: a weighty metallic clunk + settling ring — slag spent, cut unlocked
+  const s = now();
+  tone(110, 'triangle', s,        s + 0.32, 0.38, 0.007); // heavy forge thud
+  tone(460, 'sine',     s + 0.04, s + 0.38, 0.18, 0.01);  // settling metal ring
+  sweep(640, 360, 'sine', 0.28, 0.11, 0.05);               // downward shimmer (forge heat)
+}
+
 export function upgradePick() {
   // Upgrade chosen: clean double-chirp
   const s = now();
