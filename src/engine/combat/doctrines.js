@@ -13,6 +13,7 @@ import {
   lowestHpBurningEnemy,
   lowestHpAlly,
   biggestThreatEnemy,
+  focusFireEnemy,
   strongestAlly,
   allEnemies,
   allAllies,
@@ -61,7 +62,7 @@ export function reactorDoctrine(threshold) {
         name: 'build-and-burn',
         when: always,
         skillId: 'chargeUp',
-        select: biggestThreatEnemy,
+        select: focusFireEnemy,
       },
     ],
   };
@@ -89,11 +90,12 @@ export function bulwarkDoctrine(threshold) {
         select: allAllies,
       },
       // 3. Always: dig in — self block, build charge, chip. Never a dead turn.
+      //    Target lowest HP so braceMark's vuln lands on the unit the squad is killing.
       {
         name: 'dig-in',
         when: always,
         skillId: 'brace',
-        select: biggestThreatEnemy,
+        select: lowestHpEnemy,
       },
     ],
   };
@@ -182,26 +184,26 @@ export function strikerDoctrine(threshold) {
     type: 'Striker',
     threshold,
     rules: [
-      // 1. Payoff: charge banked → unload the Flurry on the biggest threat.
+      // 1. Payoff: charge banked → unload the Flurry on the focus target.
       {
         name: 'unload-the-flurry',
         when: chargeAtLeast(threshold),
         skillId: 'flurry',
-        select: biggestThreatEnemy,
+        select: focusFireEnemy,
       },
       // 2. Wildcard: opening the round → Blitz for the first-strike bonus.
       {
         name: 'blitz-on-initiative',
         when: and(isFirstAction(), chargeAtLeast(STRIKER.blitz.minCharge)),
         skillId: 'blitz',
-        select: biggestThreatEnemy,
+        select: focusFireEnemy,
       },
       // 3. Always: jab — build tempo, two quick hits. Never a dead turn.
       {
         name: 'jab-and-build',
         when: always,
         skillId: 'jab',
-        select: biggestThreatEnemy,
+        select: focusFireEnemy,
       },
     ],
   };

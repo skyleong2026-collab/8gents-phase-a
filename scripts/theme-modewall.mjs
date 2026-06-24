@@ -77,7 +77,7 @@ function checksum(result) {
   for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0;
   return h;
 }
-ok(checksum(r) === 2512779283, 'fight checksum unchanged with themes + disguises equipped (2512779283)'); // re-anchored: starter buff (Fizzpop)
+ok(checksum(r) === 779038104, 'fight checksum unchanged with themes + disguises equipped (779038104)'); // re-anchored: focus-fire AI
 
 if (fails.length) {
   console.error(`\n✗ theme-modewall FAILED (${fails.length}):`);

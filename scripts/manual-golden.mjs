@@ -67,7 +67,7 @@ if (process.argv.includes('--print')) {
 }
 
 // ── Blessed signature (re-bless via --print only on an intentional change) ──
-const EXPECTED = { winner: 'A', rounds: 6, events: 33, checksum: 2512779283 }; // re-anchored: starter buff (Fizzpop/Stoneward)
+const EXPECTED = { winner: 'A', rounds: 6, events: 33, checksum: 779038104 }; // re-anchored: focus-fire AI (Reactor/Striker/Bulwark target lowest-HP/vuln)
 
 const failures = [];
 

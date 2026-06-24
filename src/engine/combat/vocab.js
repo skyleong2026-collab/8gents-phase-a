@@ -61,3 +61,12 @@ export const selfTarget = (actor) => [actor.uid];
 export const allEnemies = (actor, state) => enemiesOf(state, actor).map((u) => u.uid);
 
 export const allAllies = (actor, state) => alliesOf(state, actor).map((u) => u.uid);
+
+// Focus-fire: prefer already-vulnerable enemies (vuln > 0) so marks and curses
+// compound; fall back to lowest HP to continue the kill that's already started.
+export const focusFireEnemy = (actor, state) => {
+  const enemies = enemiesOf(state, actor);
+  const marked = enemies.filter((e) => (e.statuses.vuln || 0) > 0);
+  if (marked.length) return pickTied(marked, (u) => u.hp, 'min', state.rng);
+  return pickTied(enemies, (u) => u.hp, 'min', state.rng);
+};

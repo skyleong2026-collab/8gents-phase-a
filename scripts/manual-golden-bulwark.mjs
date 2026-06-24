@@ -36,7 +36,7 @@ if (process.argv.includes('--print')) {
   process.exit(0);
 }
 
-const EXPECTED = { winner: 'A', rounds: 9, events: 48, checksum: 2406512973 }; // re-anchored: roster audit (Ironwall 300/20 → 380/32, an enemy fixture here)
+const EXPECTED = { winner: 'A', rounds: 9, events: 44, checksum: 1378798304 }; // re-anchored: focus-fire AI (Bulwark dig-in targets lowestHpEnemy)
 const failures = [];
 if (t1 !== transcript(r2)) failures.push('NON-DETERMINISTIC: two runs at the same seed differ');
 for (const k of Object.keys(EXPECTED)) if (sig[k] !== EXPECTED[k]) failures.push(`${k}: expected ${EXPECTED[k]}, got ${sig[k]}`);
