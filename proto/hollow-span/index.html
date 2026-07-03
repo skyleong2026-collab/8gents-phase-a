@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Hollow Span — v3 (combat buildcraft)</title>
+<style>
+  :root { color-scheme: dark; }
+  html,body { margin:0; height:100%; background:#11131a; color:#cfd4e0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #wrap { display:flex; flex-direction:column; align-items:center; gap:10px; padding:14px; }
+  #goal { width:768px; max-width:96vw; font-size:14px; color:#c7cee0; background:#171b24;
+    border:1px solid #2a2f3d; border-left:3px solid #b69ff0; border-radius:6px; padding:8px 12px; }
+  #goal b { color:#fff; }
+  #hud { display:flex; gap:12px; flex-wrap:wrap; font-size:13px; align-items:center; width:768px; max-width:96vw; }
+  .pill { background:#1b1f29; border:1px solid #2a2f3d; border-radius:6px; padding:5px 9px; }
+  .pill b { color:#fff; } .pill .lv { color:#7c8396; font-size:11px; } .pill .md { font-size:11px; }
+  .v-crest b{color:#d8b46a} .v-drift b{color:#6fc4e0} .v-press b{color:#e08a6f} .v-surge b{color:#b69ff0}
+  .hp b{color:#ff6f6f} .shard b{color:#9fe6c0} .bank b{color:#ffd34d} .tempest b{color:#c9b8ff}
+  #stage { position:relative; }
+  canvas { background:#06070b; border:1px solid #2a2f3d; image-rendering:pixelated; width:768px; height:480px; max-width:96vw; }
+  #legend { font-size:12px; color:#7c8396; width:768px; max-width:96vw; line-height:1.5; }
+  #log { font-size:12px; width:768px; max-width:96vw; min-height:18px; color:#9aa3b7; }
+  kbd { background:#252b38; border:1px solid #39414f; border-bottom-width:2px; border-radius:4px; padding:1px 5px; color:#dfe4ee; font-size:11px; }
+  .overlay { position:absolute; inset:0; display:none; flex-direction:column; justify-content:center; align-items:center;
+    gap:12px; background:rgba(8,10,15,.93); text-align:center; padding:22px; box-sizing:border-box; overflow:auto; }
+  .overlay.show { display:flex; }
+  .overlay h2 { margin:0; font-size:25px; }
+  .overlay .sub { color:#c7cee0; font-size:13px; max-width:600px; line-height:1.7; }
+  .overlay .sub b { color:#fff; }
+  #ult-track { display:flex; gap:10px; align-items:center; background:#16131f; border:1px solid #3a3155;
+    border-radius:8px; padding:10px 16px; font-size:13px; color:#c9b8ff; }
+  #ult-track .slot { padding:3px 8px; border-radius:5px; border:1px solid #4a3f6b; }
+  #ult-track .slot.have { background:#3a2f5e; color:#fff; border-color:#7a68b0; }
+  #ex-skills { display:flex; flex-direction:column; gap:7px; width:440px; max-width:90%; }
+  .srow { display:flex; align-items:center; gap:10px; background:#13161e; border:1px solid #2a2f3d; border-radius:8px; padding:8px 12px; font-size:13px; }
+  .srow .nm { width:78px; text-align:left; font-weight:bold; } .srow .ef { flex:1; text-align:left; color:#8b93a6; font-size:11.5px; }
+  .srow button { font-size:12px; padding:6px 10px; border-radius:6px; } .srow button:disabled { background:#2a2f3d; color:#6b7280; cursor:default; }
+  #ex-bank { font-size:14px; color:#ffd34d; }
+  button { font:inherit; font-size:14px; background:#2d6df6; color:#fff; border:0; border-radius:8px; padding:10px 20px; cursor:pointer; }
+  button:hover { background:#3f7bff; } #ex-btn { margin-top:4px; }
+  /* controller-style diamond control guide */
+  #pad-guide { position:absolute; top:10px; right:10px; width:150px; height:128px; pointer-events:none;
+    background:rgba(12,14,20,.55); border:1px solid #2a2f3d; border-radius:10px; }
+  .pb { position:absolute; width:64px; text-align:center; }
+  .pb .btn { width:24px; height:24px; line-height:24px; border-radius:50%; margin:0 auto 2px; font-weight:bold; font-size:12px; }
+  .pb .lbl { font-size:10px; color:#dfe4ee; text-shadow:0 1px 2px #000; }
+  .pb .key { font-size:9px; color:#8b93a6; }
+  .pb.y { top:8px;  left:43px } .pb.x { top:48px; left:6px } .pb.b { top:48px; left:80px } .pb.a { top:88px; left:43px }
+  .y .btn { background:#E8B53A; color:#1a1206 } .x .btn { background:#3C7DC4; color:#fff }
+  .b .btn { background:#D54B3D; color:#fff } .a .btn { background:#6CC24A; color:#0a1a06 }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="goal">🜂 Hunt the fogged ravine. <b style="color:#e08a6f">Blightspawn</b> guard the rich pockets — fight them with your skills. Find the 3 <b style="color:#c9b8ff">Tempest</b> mods to assemble your ultimate build. Walk home to <b style="color:#7fd0ff">extract</b> &amp; bank; fall in battle and you lose the run's satchel — never your build.</div>
+  <div id="hud">
+    <span class="pill hp">HP <b id="c-hp">100</b></span>
+    <span class="pill v-surge">🗡 Jab <b id="c-surge">∞</b><span class="md" id="m-surge"></span></span>
+    <span class="pill v-drift">💨 Dash <b id="c-drift">8</b><span class="md" id="m-drift"></span></span>
+    <span class="pill v-press">👊 Shove <b id="c-press">8</b><span class="md" id="m-press"></span></span>
+    <span class="pill v-crest">⛰ Rise <b id="c-crest">6</b><span class="md" id="m-crest"></span></span>
+    <span class="pill shard">Satchel <b id="c-shard">0</b></span>
+    <span class="pill bank">Banked <b id="c-bank">0</b></span>
+    <span class="pill tempest">Tempest <b id="c-temp">0/3</b></span>
+    <span class="pill" id="pad-ind" style="display:none;border-color:#3a6;color:#9fe6c0">🎮</span>
+  </div>
+  <div id="stage">
+    <canvas id="cv" width="768" height="480"></canvas>
+    <div id="extract" class="overlay">
+      <h2 id="ex-title" style="color:#9fe6c0">EXTRACTED</h2>
+      <div class="sub" id="ex-sub"></div>
+      <div id="ult-track"></div>
+      <div id="ex-bank"></div>
+      <div id="ex-skills"></div>
+      <button id="ex-btn">Set out again ⏎</button>
+    </div>
+    <div id="pad-guide">
+      <div class="pb y"><div class="btn">Y</div><div class="lbl">🗡 Jab</div><div class="key">F / click</div></div>
+      <div class="pb x"><div class="btn">X</div><div class="lbl">⛰ Rise</div><div class="key">Q</div></div>
+      <div class="pb b"><div class="btn">B</div><div class="lbl">👊 Shove</div><div class="key">E</div></div>
+      <div class="pb a"><div class="btn">A</div><div class="lbl">💨 Dash</div><div class="key">Space</div></div>
+    </div>
+    <div id="intro" class="overlay show">
+      <h2 style="color:#b69ff0">The Hollow Span</h2>
+      <div class="sub">
+        You are the <b>Warden</b>. The ravine is bigger than you can see, hidden by fog. <b style="color:#e08a6f">Blightspawn</b> roam it and guard the rich pockets — they'll hunt you. No timer; your enemy is what's out there, not a clock.<br><br>
+        Your skills are weapons:<br>
+        <span style="color:#b69ff0">🗡 Jab</span> <kbd>click</kbd>/<kbd>F</kbd> — fast strike, <b>unlimited</b>, your bread-and-butter ·
+        <span style="color:#6fc4e0">💨 Dash</span> <kbd>Space</kbd> — leap through enemies (brief invulnerability)<br>
+        <span style="color:#e08a6f">👊 Shove</span> <kbd>E</kbd> — knock enemies back; shove them into the water to kill ·
+        <span style="color:#d8b46a">⛰ Rise</span> <kbd>Q</kbd> — raise a wall to block them (and bridge water)<br><br>
+        Scattered out there are <b style="color:#c9b8ff">3 Tempest mods</b> — find them across runs to assemble your ultimate build; each one permanently transforms a skill. Walk back to the <b style="color:#7fd0ff">start pad</b> to <b>extract &amp; bank</b>. Fall to 0 HP and you fall back — losing the run's satchel, never your build or bank.
+      </div>
+      <button id="intro-btn">Set out ⏎</button>
+    </div>
+  </div>
+  <div id="legend">
+    <b>KB:</b> <kbd>WASD</kbd> move · aim mouse ·
+    <span style="color:#b69ff0">🗡 Jab <kbd>click</kbd>/<kbd>F</kbd></span> ·
+    <span style="color:#6fc4e0">💨 Dash <kbd>Space</kbd></span> ·
+    <span style="color:#e08a6f">👊 Shove <kbd>E</kbd></span> ·
+    <span style="color:#d8b46a">⛰ Rise <kbd>Q</kbd></span> · <kbd>Enter</kbd> extract · <kbd>R</kbd> new ravine<br>
+    <b>Pad:</b> left stick move · right stick aim · <span style="color:#b69ff0">Ⓨ/RT Jab</span> · <span style="color:#6fc4e0">Ⓐ Dash</span> · <span style="color:#e08a6f">Ⓑ Shove</span> · <span style="color:#d8b46a">Ⓧ Rise</span> · ☰ extract
+  </div>
+  <div id="log">Hunt. Survive. Find the Tempest. Bring it home.</div>
+</div>
+
+<script>
+/* =========================================================================
+   THE HOLLOW SPAN — v3 : combat buildcraft + ultimate-build goal
+   Fogged big map, still water, explore + extract (kept). NEW: HP + enemies
+   that hunt you, the 4 skills as combat weapons, and an "ultimate build"
+   (The Tempest) assembled from 3 mod-pieces hunted across runs — a visible
+   track, each piece transforms a skill. Death = lose the run, not the build.
+   Throwaway, tunable CONFIG.
+   ========================================================================= */
+const CONFIG = {
+  WORLD_W:168, WORLD_H:50, CELL:12, VIEW_W:64, VIEW_H:40,
+  crestBase:6, driftBase:8, pressBase:8, surgeBase:0,   // Jab(surge) is UNLIMITED (cooldown-gated)
+  crestRadius:1.4, crestRaise:5, elevCap:13,
+  driftDist:5.0, driftDmg:16, driftInv:0.32,
+  pressRange:3.4, pressForce:4.4, pressDmg:8,
+  surgeReach:1.6, surgeRadius:1.3, surgeDmg:14, surgeForce:2.6, jabCd:0.2,
+  moveSpeed:9.0, basinWater:2.6, wadeKnee:0.85, crossBlock:1.7, revealRadius:7.2, flowFactor:0.20,
+  playerHP:100, enemyHP:30, enemyDmg:12, enemyAtkCd:0.8, enemyAggro:8.5, enemySpeed:3.6,
+  upgradeBaseCost:8, upgradeCostStep:8,
+};
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const C=CONFIG, WW=C.WORLD_W, WH=C.WORLD_H, CELL=C.CELL, VW=C.VIEW_W, VH=C.VIEW_H;
+const idx=(x,y)=>y*WW+x;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+let R=mulberry32(1);
+const rnd=(a,b)=>a+(b-a)*R(), ri=(a,b)=>Math.floor(rnd(a,b+1)), clamp=(v,a,b)=>v<a?a:v>b?b:v, rr=()=>Math.random();
+
+// ---- the ultimate build + mods ----------------------------------------
+const MODS={
+  galestep:{name:'Galestep', skill:'drift', col:'#6fc4e0', desc:'Dash carves a wider, harder-hitting wake.'},
+  thunderclap:{name:'Thunderclap', skill:'press', col:'#e08a6f', desc:'Shove releases a radial shockwave hitting all nearby.'},
+  cyclone:{name:'Cyclone', skill:'surge', col:'#b69ff0', desc:'Jab becomes a 360° whirl that hits everything around you.'},
+};
+const TEMPEST=['galestep','thunderclap','cyclone'];   // the ultimate build
+
+// ---- persistence: bank + charge levels + collected mods ---------------
+let bank=+(localStorage.getItem('hs_bank')||0);
+let skills=(()=>{try{return Object.assign({crest:0,drift:0,press:0,surge:0},JSON.parse(localStorage.getItem('hs_skills')||'{}'));}catch{return{crest:0,drift:0,press:0,surge:0};}})();
+let mods=(()=>{try{return JSON.parse(localStorage.getItem('hs_mods')||'[]');}catch{return[];}})();
+function persist(){ localStorage.setItem('hs_bank',bank); localStorage.setItem('hs_skills',JSON.stringify(skills)); localStorage.setItem('hs_mods',JSON.stringify(mods)); }
+const hasMod=k=>mods.includes(k);
+const upCost=lvl=>C.upgradeBaseCost+C.upgradeCostStep*lvl;
+const SKILLDEFS=[
+  {key:'surge',name:'🗡 Jab',col:'#b69ff0',eff:l=>`unlimited · ${C.surgeDmg+l*3} dmg quick strike${hasMod('cyclone')?' (Cyclone whirl)':''}`},
+  {key:'drift',name:'💨 Dash',col:'#6fc4e0',eff:l=>`${C.driftBase+l} charges · leap + ${C.driftDmg} dmg${hasMod('galestep')?' (Galestep)':''}`},
+  {key:'press',name:'👊 Shove',col:'#e08a6f',eff:l=>`${C.pressBase+l} charges · knockback / water-kill${hasMod('thunderclap')?' (Thunderclap)':''}`},
+  {key:'crest',name:'⛰ Rise',col:'#d8b46a',eff:l=>`${C.crestBase+l} charges · raise a wall & bridge water`},
+];
+function applySkills(st){
+  st.crestMax=C.crestBase+skills.crest; st.crest=st.crestMax;
+  st.driftMax=C.driftBase+skills.drift; st.drift=st.driftMax; st.driftDist=C.driftDist+skills.drift*0.4;
+  st.pressMax=C.pressBase+skills.press; st.press=st.pressMax; st.pressForce=C.pressForce+skills.press*0.5;
+  st.surgeMax=C.surgeBase+skills.surge; st.surge=st.surgeMax; st.jabCd=0;
+  st.surgeDmg=C.surgeDmg+skills.surge*3;
+  st.surgeRadius=C.surgeRadius+skills.surge*0.2+(hasMod('cyclone')?1.6:0);
+}
+let runNo=0, state;
+
+// ---- run setup ---------------------------------------------------------
+function newRun(){
+  runNo++; R=mulberry32((runNo*2654435761 ^ 0x9e3779b9)>>>0);
+  const ground=new Float32Array(WW*WH), water=new Float32Array(WW*WH), seen=new Uint8Array(WW*WH);
+  for(let i=0;i<ground.length;i++) ground[i]=0.35+R()*0.3;
+  const startX=7, startY=(WH/2)|0; stampBlob(ground,startX,startY,5,4,6.2);
+  const plateaus=[{x:startX,y:startY,rx:5,ry:4,connected:true}];
+  const blobCount=ri(16,22);
+  for(let i=0;i<blobCount;i++){ const px=ri(14,WW-8),py=ri(4,WH-5),rx=ri(3,7),ry=ri(2,5);
+    stampBlob(ground,px,py,rx,ry,rnd(5.0,6.2)); plateaus.push({x:px,y:py,rx,ry,connected:false}); }
+  for(let i=1;i<plateaus.length;i++){ if(R()<0.40)continue; let best=null,bd=1e9;
+    for(let j=0;j<i;j++){ if(!plateaus[j].connected)continue; const d=Math.hypot(plateaus[j].x-plateaus[i].x,plateaus[j].y-plateaus[i].y); if(d<bd){bd=d;best=plateaus[j];} }
+    carveTrestle(ground,(best||plateaus[0]).x,(best||plateaus[0]).y,plateaus[i].x,plateaus[i].y); plateaus[i].connected=true; }
+  for(let i=0;i<ground.length;i++){ const d=C.basinWater-ground[i]; if(d>0) water[i]=d; }
+  for(let k=0;k<70;k++) settleFlow(ground,water);
+
+  // shards + enemies; rich/stranded pockets are guarded by Blightspawn
+  const shards=[], enemies=[];
+  for(let pi=1;pi<plateaus.length;pi++){ const p=plateaus[pi], stranded=!p.connected;
+    if(stranded){ const n=ri(1,2); for(let e=0;e<n;e++) enemies.push(mkEnemy(p.x+rnd(-1,1),p.y+rnd(-1,1))); }
+    const k=stranded?ri(4,7):ri(1,3);
+    for(let s=0;s<k;s++){ const sx=clamp(Math.round(p.x+rnd(-p.rx,p.rx)),1,WW-2), sy=clamp(Math.round(p.y+rnd(-p.ry,p.ry)),1,WH-2);
+      if(ground[idx(sx,sy)]>4&&water[idx(sx,sy)]<0.3) shards.push({x:sx+0.5,y:sy+0.5,got:false,rich:stranded,mod:null}); } }
+  // place any not-yet-collected Tempest mods as special pickups on stranded pockets
+  const missing=TEMPEST.filter(m=>!hasMod(m));
+  const strandedPlat=plateaus.filter(p=>!p.connected);
+  shuffle(strandedPlat);
+  missing.forEach((mk,i)=>{ const p=strandedPlat[i%Math.max(1,strandedPlat.length)]||plateaus[plateaus.length-1];
+    shards.push({x:p.x+0.5,y:p.y+0.5,got:false,rich:true,mod:mk}); });
+
+  state={ ground,water,seen, player:{x:startX,y:startY,vx:0,vy:0,r:0.45,facing:{x:1,y:0},hp:C.playerHP,inv:0,hurt:0},
+    startX,startY, shards, enemies, runShards:0, cam:{x:0,y:0}, mouse:{x:VW*CELL/2,y:VH*CELL/2}, keys:{},
+    explored:0, over:false, won:false, nearStart:false, log:[], fx:[], shake:0, padMove:{x:0,y:0} };
+  applySkills(state); revealAround(startX,startY,9);
+  logEvent(`A new ravine. ${enemies.length} Blightspawn guard the pockets.${missing.length?` ${missing.length} Tempest mod${missing.length>1?'s':''} still out there.`:' Tempest assembled — hunt freely.'}`);
+  document.getElementById('extract').classList.remove('show'); window.state=state; syncHud();
+}
+function mkEnemy(x,y){ return {x,y,vx:0,vy:0,r:0.5,hp:C.enemyHP,max:C.enemyHP,alive:true,atkCd:0,flash:0}; }
+
+// ---- gen helpers -------------------------------------------------------
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=ri(0,i);[a[i],a[j]]=[a[j],a[i]];} return a; }
+function stampBlob(g,cx,cy,rx,ry,elev){ for(let y=Math.max(0,cy-ry-1);y<=Math.min(WH-1,cy+ry+1);y++)for(let x=Math.max(0,cx-rx-1);x<=Math.min(WW-1,cx+rx+1);x++){ const d=((x-cx)/rx)**2+((y-cy)/ry)**2; if(d<=1.0) g[idx(x,y)]=Math.max(g[idx(x,y)],elev-d*0.8+(R()-0.5)*0.3); } }
+function carveTrestle(g,x0,y0,x1,y1){ const steps=Math.ceil(Math.hypot(x1-x0,y1-y0)),gaps=ri(1,3),gapAt=[]; for(let i=0;i<gaps;i++)gapAt.push(ri(2,steps-2));
+  for(let s=0;s<=steps;s++){ const t=s/steps,x=Math.round(x0+(x1-x0)*t),y=Math.round(y0+(y1-y0)*t); if(gapAt.some(ga=>Math.abs(ga-s)<=ri(0,1)))continue;
+    for(let w=-1;w<=1;w++){ const yy=clamp(y+w,0,WH-1); g[idx(clamp(x,0,WW-1),yy)]=Math.max(g[idx(clamp(x,0,WW-1),yy)],3.7); } } }
+function settleFlow(ground,water){ const f=C.flowFactor,delta=new Float32Array(WW*WH);
+  for(let y=0;y<WH;y++)for(let x=0;x<WW;x++){ const i=idx(x,y),w=water[i]; if(w<=0.0008)continue; const s=ground[i]+w;
+    for(const [ox,oy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+ox,ny=y+oy; if(nx<0||ny<0||nx>=WW||ny>=WH)continue; const j=idx(nx,ny),dh=s-(ground[j]+water[j]); if(dh>0){const flow=Math.min(w*f,dh*0.25);delta[i]-=flow;delta[j]+=flow;} } }
+  for(let i=0;i<water.length;i++) water[i]=Math.max(0,water[i]+delta[i]); }
+function revealAround(cx,cy,rad){ const {seen}=state,r2=rad*rad; for(let y=Math.max(0,(cy-rad)|0);y<=Math.min(WH-1,(cy+rad)|0);y++)for(let x=Math.max(0,(cx-rad)|0);x<=Math.min(WW-1,(cx+rad)|0);x++) if((x-cx)**2+(y-cy)**2<=r2) seen[idx(x,y)]=1; }
+function gAt(x,y){ return state.ground[idx(clamp(x|0,0,WW-1),clamp(y|0,0,WH-1))]; }
+function wAt(x,y){ return state.water[idx(clamp(x|0,0,WW-1),clamp(y|0,0,WH-1))]; }
+function logEvent(s){ if(state) state.log.push(s); document.getElementById('log').textContent=s; }
+
+// ---- input -------------------------------------------------------------
+let introOpen=true;
+function closeIntro(){ introOpen=false; document.getElementById('intro').classList.remove('show'); }
+addEventListener('keydown',e=>{
+  if(introOpen){ if(e.code==='Enter'||e.code==='Space'){e.preventDefault();closeIntro();} return; }
+  if(e.code==='KeyR'){ newRun(); return; }
+  if(state.over){ if(e.code==='Enter') newRun(); return; }
+  if(e.code==='Enter'){ tryExtract(); return; }
+  state.keys[e.code]=true;
+  if(e.code==='KeyQ') doCrest();
+  if(e.code==='Space'){ e.preventDefault(); doDrift(); }
+  if(e.code==='KeyE') doPressure();
+  if(e.code==='KeyF') doSurge();
+});
+addEventListener('keyup',e=>{ state.keys[e.code]=false; });
+cv.addEventListener('mousemove',e=>{ const r=cv.getBoundingClientRect(); state.mouse.x=(e.clientX-r.left)*(cv.width/r.width); state.mouse.y=(e.clientY-r.top)*(cv.height/r.height); });
+cv.addEventListener('mousedown',e=>{ e.preventDefault(); if(!introOpen&&!state.over) doSurge(); });
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+document.getElementById('intro-btn').addEventListener('click',closeIntro);
+document.getElementById('ex-btn').addEventListener('click',newRun);
+function mouseWorld(){ return {x:state.cam.x+state.mouse.x/CELL,y:state.cam.y+state.mouse.y/CELL}; }
+function aimDir(){ if(padAim.active) return {x:padAim.x,y:padAim.y}; const p=state.player,m=mouseWorld(); let dx=m.x-p.x,dy=m.y-p.y; const d=Math.hypot(dx,dy)||1; return {x:dx/d,y:dy/d}; }
+function aimPoint(){ const p=state.player,a=aimDir(); if(padAim.active) return {x:p.x+a.x*C.surgeReach,y:p.y+a.y*C.surgeReach}; return mouseWorld(); }
+
+// ---- gamepad -----------------------------------------------------------
+let padAim={x:1,y:0,active:false}, padPrev=[];
+function pollPad(){ const pads=navigator.getGamepads?navigator.getGamepads():[]; let gp=null; for(const p of pads){if(p){gp=p;break;}}
+  document.getElementById('pad-ind').style.display=gp?'inline-block':'none';
+  if(!gp){ state.padMove={x:0,y:0}; padAim.active=false; return; }
+  const dz=v=>Math.abs(v)<0.18?0:v; const lx=dz(gp.axes[0]||0),ly=dz(gp.axes[1]||0),rx=dz(gp.axes[2]||0),ry=dz(gp.axes[3]||0);
+  state.padMove={x:lx,y:ly};
+  if(Math.hypot(rx,ry)>0.2){const m=Math.hypot(rx,ry);padAim={x:rx/m,y:ry/m,active:true};}
+  else if(Math.hypot(lx,ly)>0.3){const m=Math.hypot(lx,ly);padAim={x:lx/m,y:ly/m,active:true};} else padAim.active=false;
+  const b=gp.buttons.map(x=>x.pressed), hit=i=>b[i]&&!padPrev[i];
+  if(!introOpen&&!state.over){ if(hit(0))doDrift(); if(hit(1))doPressure(); if(hit(2))doCrest(); if(hit(3)||hit(7))doSurge(); if(hit(9))tryExtract(); }
+  else if(introOpen&&(hit(0)||hit(9))) closeIntro(); else if(state.over&&hit(0)) newRun();
+  padPrev=b;
+}
+// ---- juice -------------------------------------------------------------
+function fxBurst(x,y,color,n,spd,life){ for(let i=0;i<n;i++){const a=rr()*6.28,s=spd*(0.4+rr()*0.7); state.fx.push({type:'p',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life,max:life,color,size:1.5+rr()*2.5});} }
+function fxRing(x,y,color,r,life){ state.fx.push({type:'ring',x,y,color,r0:3,r1:r,life:life||0.35,max:life||0.35}); }
+function fxTrail(x0,y0,x1,y1,color){ const n=7; for(let i=0;i<=n;i++){const t=i/n; state.fx.push({type:'p',x:x0+(x1-x0)*t,y:y0+(y1-y0)*t,vx:0,vy:0,life:0.32,max:0.32,color,size:5*(1-t*0.4)});} }
+function fxArc(x,y,ang,spread,r,color){ state.fx.push({type:'arc',x,y,ang,spread,r,color,life:0.22,max:0.22}); }   // a swipe (Jab/Shove)
+function fxBars(x,y,color){ state.fx.push({type:'bars',x,y,color,life:0.45,max:0.45}); }                            // ground rising (Rise)
+function shake(a){ state.shake=Math.max(state.shake,a); }
+function stepFx(dt){ state.shake=Math.max(0,state.shake-dt*36); for(const f of state.fx){ f.life-=dt; if(f.type==='p'){f.x+=f.vx*dt;f.y+=f.vy*dt;f.vx*=0.9;f.vy*=0.9;} } state.fx=state.fx.filter(f=>f.life>0); }
+
+// ---- combat helpers ----------------------------------------------------
+function hurtEnemy(e,dmg,fromX,fromY,force){ if(!e.alive)return; e.hp-=dmg; e.flash=0.18;
+  const dx=e.x-fromX,dy=e.y-fromY,d=Math.hypot(dx,dy)||1; e.vx+=dx/d*force; e.vy+=dy/d*force;
+  fxBurst(e.x,e.y,'#ffd0c0',6,5,0.3);
+  if(e.hp<=0){ e.alive=false; state.runShards+=1; fxBurst(e.x,e.y,'#e08a6f',16,7,0.5); fxRing(e.x,e.y,'#ffb499',22,0.45); shake(4); logEvent(`Blightspawn felled. satchel: ${state.runShards}`); syncHud(); } }
+
+// ---- skills ------------------------------------------------------------
+// ⛰ RISE — raise a wall of ground (block enemies / bridge water)
+function doCrest(){ if(state.crest<=0)return; state.crest--; const m=aimPoint(),rad=C.crestRadius;
+  for(let y=Math.floor(m.y-rad);y<=m.y+rad;y++)for(let x=Math.floor(m.x-rad);x<=m.x+rad;x++){ if(x<0||y<0||x>=WW||y>=WH)continue;
+    if(Math.hypot(x+0.5-m.x,y+0.5-m.y)<=rad+0.3){ const i=idx(x,y); state.ground[i]=Math.min(C.elevCap,state.ground[i]+C.crestRaise); state.water[i]=Math.max(0,state.water[i]-C.crestRaise); } }
+  for(const e of state.enemies){ if(e.alive&&Math.hypot(e.x-m.x,e.y-m.y)<rad+0.6){ hurtEnemy(e,10,m.x,m.y,3.5); } }
+  for(let k=0;k<6;k++) settleFlow(state.ground,state.water);
+  fxBars(m.x,m.y,'#e8cf9a'); fxBurst(m.x,m.y,'#d8b46a',14,5,0.5); shake(3);
+  logEvent(`Rise — raised a wall. (${state.crest} left)`); syncHud(); }
+// 💨 DASH — leap a fixed distance (lands SAFE, never strands you), damage on the way
+function doDrift(){ if(state.drift<=0)return; state.drift--; const d=aimDir(),p=state.player,x0=p.x,y0=p.y;
+  const tx=clamp(p.x+d.x*state.driftDist,0.5,WW-0.5), ty=clamp(p.y+d.y*state.driftDist,0.5,WH-0.5);
+  const land=safeLand(x0,y0,tx,ty); p.x=land.x; p.y=land.y; p.vx=p.vy=0; p.inv=C.driftInv;
+  const wake=hasMod('galestep')?1.1:0.7, dmg=hasMod('galestep')?C.driftDmg+8:C.driftDmg;
+  for(const e of state.enemies){ if(!e.alive)continue; if(distToSeg(e.x,e.y,x0,y0,p.x,p.y)<wake) hurtEnemy(e,dmg,x0,y0,4); }
+  fxTrail(x0,y0,p.x,p.y,hasMod('galestep')?'rgba(150,220,255,0.95)':'rgba(111,196,224,0.85)'); fxBurst(p.x,p.y,'#6fc4e0',8,5,0.35); shake(2);
+  logEvent(`Dash — leapt${hasMod('galestep')?' (Galestep wake)':''}. (${state.drift} left)`); syncHud(); }
+// 👊 SHOVE — knock enemies back (into water = kill); Thunderclap = radial blast
+function doPressure(){ if(state.press<=0)return; state.press--; const p=state.player,d=aimDir(); let hit=false;
+  for(const e of state.enemies){ if(!e.alive)continue; const rx=e.x-p.x,ry=e.y-p.y,dist=Math.hypot(rx,ry); if(dist>C.pressRange||dist<0.01)continue;
+    if(((rx/dist)*d.x+(ry/dist)*d.y)<0.4)continue; e.vx+=d.x*state.pressForce; e.vy+=d.y*state.pressForce; hurtEnemy(e,C.pressDmg,p.x,p.y,0); hit=true; }
+  if(hasMod('thunderclap')){ for(const e of state.enemies){ if(e.alive&&Math.hypot(e.x-p.x,e.y-p.y)<3.6){ const rx=e.x-p.x,ry=e.y-p.y,dd=Math.hypot(rx,ry)||1; e.vx+=rx/dd*3; e.vy+=ry/dd*3; hurtEnemy(e,10,p.x,p.y,0); } } fxRing(p.x,p.y,'#ffb08a',3.6*CELL,0.45); }
+  const ang=Math.atan2(d.y,d.x); fxArc(p.x,p.y,ang,0.7,C.pressRange*CELL,'#e08a6f'); fxBurst(p.x+d.x,p.y+d.y,'#e08a6f',6,5,0.3); shake(hit?5:3);
+  logEvent(hit?`Shove — knocked them back${hasMod('thunderclap')?' (Thunderclap!)':''}. (${state.press} left)`:`Shove — nothing in range. (${state.press} left)`); syncHud(); }
+// 🗡 JAB — unlimited quick strike (short cooldown); Cyclone = 360° whirl
+function doSurge(){ if(state.jabCd>0)return; state.jabCd=C.jabCd;
+  const p=state.player, whirl=hasMod('cyclone'); const c=whirl?{x:p.x,y:p.y}:aimPoint(), rad=state.surgeRadius;
+  for(const e of state.enemies){ if(!e.alive)continue; if(Math.hypot(e.x-c.x,e.y-c.y)<rad) hurtEnemy(e,state.surgeDmg,c.x,c.y,C.surgeForce); }
+  if(whirl){ fxRing(p.x,p.y,'#b69ff0',rad*CELL,0.35); fxBurst(p.x,p.y,'#cdbcf7',16,7,0.4); }
+  else { const ang=Math.atan2(aimDir().y,aimDir().x); fxArc(p.x,p.y,ang,0.9,rad*CELL+6,'#cdbcf7'); }
+  shake(2); }
+function distToSeg(px,py,ax,ay,bx,by){ const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy||1; let t=((px-ax)*dx+(py-ay)*dy)/l2; t=clamp(t,0,1); return Math.hypot(px-(ax+dx*t),py-(ay+dy*t)); }
+// dash landing: walk back from the target to the farthest standable (non-deep-water) cell
+function safeLand(x0,y0,tx,ty){ const steps=10;
+  for(let i=steps;i>=0;i--){ const t=i/steps, x=x0+(tx-x0)*t, y=y0+(ty-y0)*t; if(wAt(x,y)<=C.crossBlock) return {x,y}; }
+  return {x:x0,y:y0}; }
+
+// ---- extract / fall back ----------------------------------------------
+function tryExtract(){ const p=state.player; if(Math.hypot(p.x-state.startX,p.y-state.startY)>3.5){ logEvent('Return to the glowing start pad to extract.'); return; }
+  endRun(true); }
+function fallBack(){ endRun(false); }
+function endRun(extracted){ state.over=true; state.won=extracted;
+  if(extracted){ bank+=state.runShards; persist(); document.getElementById('ex-title').textContent='EXTRACTED'; document.getElementById('ex-title').style.color='#9fe6c0';
+    document.getElementById('ex-sub').innerHTML=`You banked <b>${state.runShards}</b> shard${state.runShards===1?'':'s'}. Spend the bank to sharpen a skill.`; }
+  else { document.getElementById('ex-title').textContent='YOU FELL BACK'; document.getElementById('ex-title').style.color='#ff6f6f';
+    document.getElementById('ex-sub').innerHTML=`The Blight overwhelmed you. The run's satchel is lost — but your build and bank are safe.`; }
+  renderUpgradePanel(); document.getElementById('extract').classList.add('show'); syncHud(); }
+function renderUpgradePanel(){
+  const got=TEMPEST.filter(hasMod).length;
+  document.getElementById('ult-track').innerHTML = `<b style="color:#c9b8ff">⚡ The Tempest ${got}/3</b>`+
+    TEMPEST.map(m=>`<span class="slot ${hasMod(m)?'have':''}">${MODS[m].name}</span>`).join('')+
+    (got===3?` <span style="color:#ffd34d">— ASSEMBLED</span>`:'');
+  document.getElementById('ex-bank').textContent=`Bank: ${bank} shards`;
+  document.getElementById('ex-skills').innerHTML=SKILLDEFS.map(d=>{ const lvl=skills[d.key],cost=upCost(lvl),can=bank>=cost;
+    return `<div class="srow"><span class="nm" style="color:${d.col}">${d.name} <span style="color:#7c8396">L${lvl}</span></span><span class="ef">${d.eff(lvl)}</span><button onclick="upgradeSkill('${d.key}')" ${can?'':'disabled'}>+1 · ${cost}</button></div>`; }).join('');
+}
+function upgradeSkill(key){ const lvl=skills[key],cost=upCost(lvl); if(bank<cost)return; bank-=cost; skills[key]=lvl+1; persist(); renderUpgradePanel(); syncHud(); }
+window.upgradeSkill=upgradeSkill;
+
+// ---- enemies -----------------------------------------------------------
+function stepEnemy(e,dt){ if(!e.alive)return;
+  e.x=clamp(e.x+e.vx*dt,0.5,WW-0.5); e.y=clamp(e.y+e.vy*dt,0.5,WH-0.5); e.vx*=0.86; e.vy*=0.86; e.flash=Math.max(0,e.flash-dt); e.atkCd=Math.max(0,e.atkCd-dt);
+  if(wAt(e.x,e.y)>C.crossBlock){ e.alive=false; fxBurst(e.x,e.y,'#5a78a0',16,7,0.5); fxRing(e.x,e.y,'#9fc0ff',24,0.5); shake(5); state.runShards+=1; logEvent('A Blightspawn drowned in the tide!'); syncHud(); return; }
+  const p=state.player, dp=Math.hypot(p.x-e.x,p.y-e.y);
+  if(Math.abs(e.vx)+Math.abs(e.vy)<2.6 && dp<C.enemyAggro){
+    let fx=p.x-e.x,fy=p.y-e.y; const m=Math.hypot(fx,fy)||1; fx/=m; fy/=m; const here=gAt(e.x,e.y); let best=null,bs=-1e9;
+    for(let a=0;a<8;a++){ const ang=a/8*Math.PI*2,nx=e.x+Math.cos(ang)*0.8,ny=e.y+Math.sin(ang)*0.8;
+      if(wAt(nx,ny)>C.wadeKnee)continue; if(gAt(nx,ny)-here>C.crestRaise*0.6)continue; const sc=(Math.cos(ang)*fx+Math.sin(ang)*fy); if(sc>bs){bs=sc;best={nx,ny};} }
+    if(best){ const sp=C.enemySpeed*dt; e.x+=(best.nx-e.x)*sp; e.y+=(best.ny-e.y)*sp; }
+  }
+  if(dp<0.85 && e.atkCd<=0 && p.inv<=0){ p.hp-=C.enemyDmg; p.hurt=0.25; e.atkCd=C.enemyAtkCd;
+    const kx=(p.x-e.x)/(dp||1),ky=(p.y-e.y)/(dp||1); p.vx+=kx*9; p.vy+=ky*9; shake(4); syncHud();
+    if(p.hp<=0 && !state.over){ fallBack(); } }
+}
+
+// ---- player ------------------------------------------------------------
+function canStand(x,y,fx,fy){ if(wAt(fx,fy)>C.crossBlock)return true;   // already stuck in deep water -> allow escape anywhere
+  if(wAt(x,y)>C.crossBlock)return false; if(gAt(x,y)-gAt(fx,fy)>C.crestRaise*0.7)return false; return true; }
+function stepPlayer(dt){ const p=state.player,k=state.keys; p.inv=Math.max(0,p.inv-dt); p.hurt=Math.max(0,p.hurt-dt); state.jabCd=Math.max(0,state.jabCd-dt);
+  let ix=0,iy=0; if(k['KeyA']||k['ArrowLeft'])ix-=1; if(k['KeyD']||k['ArrowRight'])ix+=1; if(k['KeyW']||k['ArrowUp'])iy-=1; if(k['KeyS']||k['ArrowDown'])iy+=1;
+  const mk=Math.hypot(ix,iy); if(mk>0){ix/=mk;iy/=mk;} const pm=state.padMove; if(Math.hypot(pm.x,pm.y)>0.2){ix=pm.x;iy=pm.y;}
+  const mag=Math.min(1,Math.hypot(ix,iy)); let speed=C.moveSpeed; if(wAt(p.x,p.y)>C.wadeKnee) speed*=0.45;
+  if(mag>0.05){ const nrm=Math.hypot(ix,iy); p.facing={x:ix/nrm,y:iy/nrm}; p.vx+=(ix*speed-p.vx)*Math.min(1,26*dt); p.vy+=(iy*speed-p.vy)*Math.min(1,26*dt); }
+  else { p.vx-=p.vx*Math.min(1,16*dt); p.vy-=p.vy*Math.min(1,16*dt); }
+  let tx=clamp(p.x+p.vx*dt,0.5,WW-0.5), ty=clamp(p.y+p.vy*dt,0.5,WH-0.5);
+  if(canStand(tx,ty,p.x,p.y)){ p.x=tx;p.y=ty; } else { if(canStand(tx,p.y,p.x,p.y)){p.x=tx;}else p.vx=0; if(canStand(p.x,ty,p.x,p.y)){p.y=ty;}else p.vy=0; }
+  revealAround(p.x,p.y,C.revealRadius);
+  // slow HP regen when near the start pad
+  if(Math.hypot(p.x-state.startX,p.y-state.startY)<4 && p.hp<C.playerHP){ p.hp=Math.min(C.playerHP,p.hp+18*dt); syncHud(); }
+  for(const s of state.shards){ if(!s.got&&Math.hypot(s.x-p.x,s.y-p.y)<0.8){ s.got=true;
+    if(s.mod){ if(!hasMod(s.mod)){ mods.push(s.mod); persist(); } const got=TEMPEST.filter(hasMod).length;
+      fxBurst(s.x,s.y,MODS[s.mod].col,24,8,0.7); fxRing(s.x,s.y,MODS[s.mod].col,30,0.6); shake(7);
+      applySkills(state);  // mod may change skill stats (e.g. Maelstrom radius)
+      logEvent(`◆ TEMPEST MOD — ${MODS[s.mod].name}! ${MODS[s.mod].desc} (${got}/3)`+(got===3?' THE TEMPEST IS ASSEMBLED!':'')); }
+    else { state.runShards+=s.rich?2:1; fxBurst(s.x,s.y,s.rich?'#ffd97a':'#9fe6c0',s.rich?12:7,5,0.5); fxRing(s.x,s.y,s.rich?'#ffe9b0':'#bff0d6',12,0.3); logEvent(s.rich?`Rich shard! (+2) satchel: ${state.runShards}`:`Shard. satchel: ${state.runShards}`); }
+    syncHud(); } }
+  state.nearStart=Math.hypot(p.x-state.startX,p.y-state.startY)<3.5;
+}
+
+// ---- render ------------------------------------------------------------
+let last=0, perf=0;
+function render(){ const cam=state.cam,p=state.player;
+  cam.x=clamp(p.x-VW/2,0,WW-VW); cam.y=clamp(p.y-VH/2,0,WH-VH);   // fractional camera = smooth scroll
+  ctx.save(); if(state.shake>0.1) ctx.translate((Math.random()*2-1)*state.shake,(Math.random()*2-1)*state.shake);
+  const {ground,water,seen}=state;
+  const x0=Math.floor(cam.x), y0=Math.floor(cam.y);
+  for(let vy=-1;vy<=VH;vy++)for(let vx=-1;vx<=VW;vx++){ const wx=x0+vx, wy=y0+vy; if(wx<0||wy<0||wx>=WW||wy>=WH)continue;
+    const i=idx(wx,wy), sx=(wx-cam.x)*CELL, sy=(wy-cam.y)*CELL;
+    if(!seen[i]){ ctx.fillStyle='#06070b'; ctx.fillRect(sx,sy,CELL+1,CELL+1); continue; }
+    const g=ground[i],w=water[i],t=clamp(g/C.elevCap,0,1); ctx.fillStyle=`rgb(${(28+t*92)|0},${(30+t*78)|0},${(38+t*70)|0})`; ctx.fillRect(sx,sy,CELL+1,CELL+1);
+    if(w>0.04){ const a=clamp(0.2+w*0.3,0,0.82); ctx.fillStyle=w>C.crossBlock?`rgba(74,96,150,${a})`:`rgba(80,120,180,${a})`; ctx.fillRect(sx,sy,CELL+1,CELL+1); } }
+  const toS=(wx,wy)=>({x:(wx-cam.x)*CELL,y:(wy-cam.y)*CELL});
+  if(seen[idx(state.startX,state.startY)]){ const s=toS(state.startX,state.startY),pul=0.5+0.5*Math.sin(perf*4);
+    ctx.fillStyle=`rgba(127,208,255,${0.1+pul*0.16})`; ctx.beginPath(); ctx.arc(s.x,s.y,20+pul*8,0,7); ctx.fill();
+    ctx.strokeStyle='#7fd0ff'; ctx.lineWidth=2; ctx.strokeRect(s.x-9,s.y-9,18,18); ctx.fillStyle='#7fd0ff'; ctx.font='10px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('START / EXTRACT',s.x,s.y-13); }
+  for(const sh of state.shards){ if(sh.got||!seen[idx(sh.x|0,sh.y|0)])continue; const s=toS(sh.x,sh.y);
+    if(sh.mod){ const pul=0.5+0.5*Math.sin(perf*5); ctx.fillStyle=`rgba(201,184,255,${0.12+pul*0.2})`; ctx.beginPath(); ctx.arc(s.x,s.y,12+pul*5,0,7); ctx.fill();
+      ctx.fillStyle=MODS[sh.mod].col; ctx.save(); ctx.translate(s.x,s.y); ctx.rotate(Math.PI/4); ctx.fillRect(-6,-6,12,12); ctx.restore();
+      ctx.fillStyle='#c9b8ff'; ctx.font='10px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('⚡ '+MODS[sh.mod].name,s.x,s.y-13); continue; }
+    ctx.save(); ctx.translate(s.x,s.y); ctx.rotate(Math.PI/4); ctx.fillStyle=sh.rich?'#ffd97a':'#9fe6c0'; const r=sh.rich?5:4; ctx.fillRect(-r,-r,r*2,r*2); ctx.restore(); }
+  for(const e of state.enemies){ if(!e.alive||!seen[idx(e.x|0,e.y|0)])continue; const s=toS(e.x,e.y);
+    ctx.fillStyle=e.flash>0?'#fff':'rgba(224,115,77,.9)'; ctx.beginPath(); ctx.moveTo(s.x,s.y-9); ctx.lineTo(s.x+8,s.y+6); ctx.lineTo(s.x-8,s.y+6); ctx.closePath(); ctx.fill(); ctx.strokeStyle='#ffcaa8'; ctx.lineWidth=1.5; ctx.stroke();
+    const hpf=clamp(e.hp/e.max,0,1); ctx.fillStyle='#000'; ctx.fillRect(s.x-9,s.y-15,18,3); ctx.fillStyle='#ff7a5a'; ctx.fillRect(s.x-9,s.y-15,18*hpf,3); }
+  // smooth light around the Warden (replaces the chunky per-cell fog ring)
+  const pls=toS(p.x,p.y), R0=(C.revealRadius-2)*CELL, R1=(C.revealRadius+2.5)*CELL;
+  const grd=ctx.createRadialGradient(pls.x,pls.y,R0,pls.x,pls.y,R1);
+  grd.addColorStop(0,'rgba(6,7,11,0)'); grd.addColorStop(1,'rgba(6,7,11,0.62)');
+  ctx.fillStyle=grd; ctx.fillRect(-24,-24,cv.width+48,cv.height+48);
+  const ps=toS(p.x,p.y); ctx.globalAlpha=p.inv>0?0.55:1; ctx.fillStyle=p.hurt>0?'#ff6f6f':'#7fd0ff'; ctx.beginPath(); ctx.arc(ps.x,ps.y,7,0,7); ctx.fill(); ctx.globalAlpha=1;
+  ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(ps.x,ps.y); ctx.lineTo(ps.x+p.facing.x*11,ps.y+p.facing.y*11); ctx.stroke();
+  const d=aimDir(); ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.setLineDash([3,4]); ctx.beginPath(); ctx.moveTo(ps.x,ps.y); ctx.lineTo(ps.x+d.x*55,ps.y+d.y*55); ctx.stroke(); ctx.setLineDash([]);
+  if(padAim.active){ const ap=aimPoint(),rs=toS(ap.x,ap.y); ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(rs.x,rs.y,6,0,7); ctx.stroke(); }
+  for(const f of state.fx){ const a=clamp(f.life/f.max,0,1),s=toS(f.x,f.y);
+    if(f.type==='ring'){ ctx.globalAlpha=a*0.8; ctx.strokeStyle=f.color; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(s.x,s.y,f.r0+(f.r1-f.r0)*(1-a),0,7); ctx.stroke(); }
+    else if(f.type==='arc'){ ctx.globalAlpha=a*0.95; ctx.strokeStyle=f.color; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(s.x,s.y,f.r*(0.6+0.4*(1-a)),f.ang-f.spread,f.ang+f.spread); ctx.stroke(); }
+    else if(f.type==='bars'){ ctx.globalAlpha=a; ctx.fillStyle=f.color; for(let i=-1;i<=1;i++){ const h=(1-a)*16; ctx.fillRect(s.x+i*6-2, s.y+8-h, 4, h); } }
+    else { ctx.globalAlpha=a; ctx.fillStyle=f.color; ctx.fillRect(s.x-f.size/2,s.y-f.size/2,f.size,f.size); } }
+  ctx.globalAlpha=1;
+  if(state.nearStart&&!state.over&&state.runShards>0){ ctx.fillStyle='rgba(127,208,255,.95)'; ctx.font='bold 13px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(`▽ ENTER / ☰ to extract ${state.runShards} shard${state.runShards===1?'':'s'} ▽`,cv.width/2,26); }
+  ctx.textAlign='left'; ctx.restore();
+}
+
+// ---- hud ---------------------------------------------------------------
+function syncHud(){
+  for(const d of SKILLDEFS){ const mk=mods.find(m=>MODS[m].skill===d.key); document.getElementById('m-'+d.key).textContent=mk?' ⚡':''; }
+  document.getElementById('c-hp').textContent=Math.max(0,Math.round(state.player.hp));
+  document.getElementById('c-crest').textContent=state.crest; document.getElementById('c-drift').textContent=state.drift;
+  document.getElementById('c-press').textContent=state.press; document.getElementById('c-surge').textContent='∞';
+  document.getElementById('c-shard').textContent=state.runShards; document.getElementById('c-bank').textContent=bank;
+  document.getElementById('c-temp').textContent=TEMPEST.filter(hasMod).length+'/3';
+  let n=0; for(let i=0;i<state.seen.length;i++) n+=state.seen[i]; state.explored=Math.round(n/(WW*WH)*100); document.getElementById('c-expl')&&(document.getElementById('c-expl').textContent=state.explored+'%');
+}
+function frame(ts){ const dt=Math.min(0.04,(ts-last)/1000)||0; last=ts; perf+=dt; pollPad();
+  if(!state.over&&!introOpen){ stepPlayer(dt); for(const e of state.enemies) stepEnemy(e,dt); if(((perf*4)|0)!==(((perf-dt)*4)|0)) syncHud(); }
+  stepFx(dt); render(); requestAnimationFrame(frame);
+}
+newRun(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

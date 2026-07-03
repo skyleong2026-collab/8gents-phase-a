@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Agent — Sprite Preview</title>
+<style>
+  body { background: #1a1a2e; color: #ccc; font-family: monospace; display: flex; flex-direction: column; align-items: center; padding: 32px; gap: 28px; }
+  h1 { color: #7ecfff; margin: 0; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
+  .row { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+  .rowlabel { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 4px 14px; border-radius: 3px; }
+  .rowlabel.old { color: #ffd79b; background: #3a2e1a; }
+  .rowlabel.new { color: #9bffb0; background: #1a3a24; }
+  .states { display: flex; gap: 40px; align-items: flex-end; flex-wrap: wrap; justify-content: center; }
+  .state { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .label { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #888; }
+  canvas { image-rendering: pixelated; border: 1px solid #2a2a4e; background: #0d0d1a; }
+  .controls { display: flex; gap: 18px; align-items: center; position: sticky; top: 0; background: #1a1a2e; padding: 12px; border-radius: 6px; z-index: 10; flex-wrap: wrap; justify-content: center; }
+  button { background: #2a2a4e; border: 1px solid #4a4a8e; color: #ccc; padding: 6px 16px; cursor: pointer; font-family: monospace; font-size: 12px; }
+  button:hover { background: #3a3a6e; }
+  label { font-size: 12px; }
+  .frame-info { font-size: 11px; color: #777; min-width: 70px; }
+  hr { border: none; border-top: 1px solid #2a2a4e; width: 90%; margin: 4px 0; }
+</style>
+</head>
+<body>
+<h1>Agent — Choppy (5f) vs Smooth (16f)</h1>
+
+<div class="controls">
+  <button id="btn">⏸ Pause</button>
+  <label>Speed: <input type="range" id="speed" min="2" max="24" value="12"></label>
+  <span class="frame-info" id="info">12 fps</span>
+  <label>Scale: <input type="range" id="scale" min="1" max="5" value="2"></label>
+  <button id="reload">↻ Reload frames</button>
+</div>
+
+<div class="row">
+  <div class="rowlabel new">▶ New — 16-frame, built from your locked image (longer + smoother)</div>
+  <div class="states" id="states-new"></div>
+</div>
+<hr>
+<div class="row">
+  <div class="rowlabel old">Old — 5-frame (the short/choppy version)</div>
+  <div class="states" id="states-old"></div>
+</div>
+
+<script>
+const VARIANTS = {
+  'new': { suffix: '-smooth' },
+  'old': { suffix: '' },
+};
+const ORDER = ['idle', 'attack', 'hurt', 'defeated'];
+const frames = {}; // frames[variant][state] = [img,...]
+
+// Auto-detect: load frame_00, frame_01, ... until one fails.
+function loadSequence(variant, state, suffix) {
+  return new Promise((resolve) => {
+    const arr = [];
+    const tryNext = (i) => {
+      const img = new Image();
+      img.src = 'art/agent/' + state + suffix + '/frame_' + String(i).padStart(2, '0') + '.png?t=' + Date.now();
+      img.onload = () => { arr.push(img); tryNext(i + 1); };
+      img.onerror = () => resolve(arr);
+    };
+    tryNext(0);
+  });
+}
+
+async function build() {
+  for (const v of Object.keys(VARIANTS)) {
+    frames[v] = {};
+    const container = document.getElementById('states-' + v);
+    container.innerHTML = '';
+    for (const state of ORDER) {
+      const arr = await loadSequence(v, state, VARIANTS[v].suffix);
+      frames[v][state] = arr;
+      const div = document.createElement('div');
+      div.className = 'state';
+      div.innerHTML = '<div class="label">' + state + ' · ' + arr.length + 'f</div>';
+      const canvas = document.createElement('canvas');
+      canvas.id = 'c-' + v + '-' + state;
+      canvas.width = 256; canvas.height = 256;
+      div.appendChild(canvas);
+      container.appendChild(div);
+    }
+  }
+  applyScale();
+  startAnimation();
+}
+
+let tick = 0, running = true, fps = 12, intervalId;
+
+function applyScale() {
+  const s = parseInt(document.getElementById('scale').value);
+  document.getElementById('info').textContent = fps + ' fps · ' + s + 'x';
+  document.querySelectorAll('canvas').forEach(c => {
+    c.style.width = (256 * s) + 'px'; c.style.height = (256 * s) + 'px';
+  });
+}
+
+function draw() {
+  for (const v of Object.keys(VARIANTS)) {
+    for (const state of ORDER) {
+      const arr = (frames[v] || {})[state] || [];
+      const canvas = document.getElementById('c-' + v + '-' + state);
+      if (!canvas || !arr.length) continue;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, 256, 256);
+      const img = arr[tick % arr.length];
+      if (img && img.complete && img.naturalWidth) ctx.drawImage(img, 0, 0, 256, 256);
+    }
+  }
+}
+
+function startAnimation() {
+  clearInterval(intervalId);
+  intervalId = setInterval(() => { if (running) { tick++; draw(); } }, 1000 / fps);
+  draw();
+}
+
+document.getElementById('btn').addEventListener('click', () => {
+  running = !running;
+  document.getElementById('btn').textContent = running ? '⏸ Pause' : '▶ Play';
+});
+document.getElementById('speed').addEventListener('input', (e) => { fps = parseInt(e.target.value); applyScale(); startAnimation(); });
+document.getElementById('scale').addEventListener('input', applyScale);
+document.getElementById('reload').addEventListener('click', build);
+
+build();
+</script>
+</body>
+</html>

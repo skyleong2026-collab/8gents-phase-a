@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Barlow:wght@400;500;600;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
@@ -42,8 +43,9 @@
   #board { position: relative; width: calc(var(--tile)*16); height: calc(var(--tile)*11); background: var(--bg-board);
            border: 1px solid var(--line); box-shadow: inset 0 0 80px #00000099, 0 6px 26px #00000080; }
   /* battlefield camera viewport: a fixed window into the larger board (pan/zoom inside it) */
-  #boardvp { position: relative; overflow: hidden; width: calc(var(--tile)*12); height: calc(var(--tile)*8.6);
-             background: #0a0703; border: 1px solid var(--line); border-radius: 4px; box-shadow: inset 0 0 60px #000000aa, 0 6px 26px #00000080; cursor: grab; }
+  #boardvp { position: relative; overflow: hidden; width: calc(var(--tile)*12); height: calc(var(--tile)*8.6); max-width:100%;
+             background: #0a0703; border: 1px solid var(--line); border-radius: 4px; box-shadow: inset 0 0 60px #000000aa, 0 6px 26px #00000080; cursor: grab;
+             touch-action: pan-x pan-y; }   /* one finger scrolls the page / taps tiles · two fingers pan+zoom the map (handled in JS) */
   #boardcam { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
   #boardcam #board { border: none; box-shadow: none; }
   #boardcam #board.tilt { margin: 0; }
@@ -214,6 +216,143 @@
   .cairn { font-family:var(--font-mono); font-size:11.5px; color:var(--faint); border-top:1px solid var(--line-soft); padding-top:9px; }
   .togrow { display:flex; gap:10px; align-items:center; font-size:11.5px; color:var(--dim); }
 
+  /* ─── Intro / opening sequence ─── */
+  #intro { display:none; max-width:860px; width:100%; flex-direction:column; align-items:center; gap:16px; animation:rwt-fade .5s ease; }
+  @keyframes rwt-fade { from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none} }
+  .intro-art { width:100%; aspect-ratio:16/7; border:1px solid var(--line-2); border-radius:8px; position:relative; overflow:hidden;
+    background:
+      radial-gradient(120% 130% at 50% 8%, rgba(224,138,58,.22), rgba(224,138,58,0) 55%),
+      radial-gradient(90% 90% at 50% 120%, rgba(154,106,208,.18), rgba(154,106,208,0) 60%),
+      linear-gradient(#1a1206, #0f0b06);
+    background-size:cover; background-position:center; box-shadow:inset 0 0 90px #000a, 0 8px 30px #0009; }
+  .intro-art[data-src]::after { content:'⛰  the Drop  ·  intro art lands here'; position:absolute; inset:auto 0 10px 0; text-align:center;
+    font-family:var(--font-mono); font-size:11px; color:var(--faint); letter-spacing:1px; }
+  .intro-art .horizon { position:absolute; left:0; right:0; bottom:34%; height:1px; background:linear-gradient(90deg,transparent,var(--line-2),transparent); opacity:.6; }
+  .intro-art .glow { position:absolute; left:50%; top:14%; width:120px; height:120px; transform:translateX(-50%); border-radius:50%;
+    background:radial-gradient(circle, rgba(154,106,208,.55), rgba(154,106,208,0) 70%); filter:blur(4px); }
+  .intro-title { font-family:var(--font-head); font-size:38px; font-weight:700; letter-spacing:1px; color:var(--ink); text-shadow:0 2px 4px #000; text-align:center; margin:0; }
+  .intro-title b { color:var(--amber); }
+  .intro-kick { font-family:var(--font-mono); font-size:12px; letter-spacing:3px; text-transform:uppercase; color:var(--ember); margin:-6px 0 0; }
+  .intro-story { max-width:680px; font-size:15px; line-height:1.62; color:var(--ink); text-align:center; }
+  .intro-story p { margin:0 0 12px; }
+  .intro-story .lede { color:var(--amber); font-family:var(--font-head); font-size:16.5px; }
+  .intro-btns { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; }
+
+  /* ─── Visual town (the Frontier) ─── */
+  .townwrap { display:flex; width:100%; flex-direction:column; gap:14px; animation:rwt-fade .5s ease; }
+  .town-head { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:8px; }
+  .town-head h2 { font-family:var(--font-head); margin:0; color:#fff; font-size:21px; } .town-head h2::first-letter{ color:var(--amber); }
+  .town-head .res { font-size:13.5px; color:var(--amber); } .town-head .res b{ color:#fff; }
+  .town-scene { position:relative; border:1px solid var(--line-2); border-radius:10px; padding:18px; overflow:hidden;
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(224,138,58,.16), rgba(224,138,58,0) 55%),
+      radial-gradient(80% 120% at 80% 120%, rgba(154,106,208,.12), transparent 60%),
+      linear-gradient(#191206,#0f0b06);
+    background-size:cover; background-position:center; box-shadow:inset 0 0 80px #0009; }
+  .town-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; position:relative; z-index:2; }
+  .bldg-tile { position:relative; text-align:left; background:linear-gradient(#241b10,#1a130a); border:1px solid var(--line-2); border-radius:9px;
+    padding:14px 14px 12px; cursor:pointer; color:var(--ink); font-family:var(--font-body); transition:transform .12s, border-color .12s, box-shadow .12s; overflow:hidden; }
+  .bldg-tile:hover { transform:translateY(-3px); border-color:var(--amber); box-shadow:0 8px 22px #0008, 0 0 0 1px var(--amber) inset; }
+  .bldg-tile .ico { font-size:34px; line-height:1; display:block; margin-bottom:8px; filter:drop-shadow(0 2px 3px #000); }
+  .bldg-tile .bname { font-family:var(--font-head); font-weight:700; color:#fff; font-size:15.5px; }
+  .bldg-tile .btier { color:var(--amber); letter-spacing:2px; font-size:11px; margin-left:4px; }
+  .bldg-tile .bdesc { color:var(--dim); font-size:11.5px; margin-top:3px; line-height:1.4; }
+  .bldg-tile .badge { position:absolute; top:8px; right:8px; font-size:10px; font-family:var(--font-mono); padding:2px 6px; border-radius:10px; background:#3a2d12; color:var(--amber); border:1px solid var(--line-2); }
+  .bldg-tile.go { background:linear-gradient(#1f5a3a,#143f29); border-color:#3fae6f; }
+  .bldg-tile.go .bname, .bldg-tile.go .ico { color:#cfffe0; }
+  .bldg-tile.go:hover { border-color:#7fe0a8; box-shadow:0 8px 22px #0008, 0 0 0 1px #7fe0a8 inset; }
+  .bldg-tile.graftable { border-color:#6a3a72; } .bldg-tile.graftable:hover{ border-color:var(--violet); box-shadow:0 8px 22px #0008,0 0 0 1px var(--violet) inset; }
+  .bldg-tile.locked { opacity:.5; cursor:default; } .bldg-tile.locked:hover{ transform:none; border-color:var(--line-2); box-shadow:none; }
+  .town-back { align-self:flex-start; }
+  .town-detail { background:var(--bg-panel); border:1px solid var(--line-2); border-radius:9px; padding:16px; }
+  .town-detail h3 { font-family:var(--font-head); margin:0 0 4px; color:#fff; font-size:18px; }
+  .town-detail h3 .ico { margin-right:6px; }
+  .roster-strip { display:flex; gap:10px; flex-wrap:wrap; }
+  .roster-strip .mcard { flex:1; min-width:200px; }
+
+  /* ─── Skill-tree map ─── */
+  #trees { display:none; max-width:1040px; width:100%; flex-direction:column; gap:14px; animation:rwt-fade .5s ease; }
+  .trees-bg { position:relative; border:1px solid var(--line-2); border-radius:10px; padding:18px; overflow:hidden;
+    background:
+      radial-gradient(70% 90% at 18% 0%, rgba(126,196,224,.12), transparent 55%),
+      radial-gradient(80% 90% at 90% 110%, rgba(154,106,208,.16), transparent 55%),
+      linear-gradient(#14100a,#0d0a06);
+    background-size:cover; background-position:center; box-shadow:inset 0 0 90px #000a; }
+  .tree-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; position:relative; z-index:2; }
+  .tree-tab { background:#221a10; border:1px solid var(--line-2); color:var(--dim); padding:7px 12px; border-radius:20px; cursor:pointer; font-family:var(--font-body); font-size:12.5px; font-weight:600; }
+  .tree-tab:hover { color:var(--ink); border-color:var(--amber); }
+  .tree-tab.on { background:#3a2d12; color:#fff; border-color:var(--amber); }
+  .tree-map { position:relative; z-index:2; display:flex; flex-direction:column; gap:0; align-items:center; }
+  .tree-rank { display:flex; flex-direction:column; align-items:center; width:100%; }
+  .tree-rank .rlabel { font-family:var(--font-mono); font-size:10.5px; letter-spacing:2px; text-transform:uppercase; color:var(--faint); margin:2px 0; }
+  .tree-fork { display:flex; gap:30px; justify-content:center; flex-wrap:wrap; }
+  .tnode { width:240px; background:linear-gradient(#241b10,#1a130a); border:1px solid var(--line-2); border-radius:9px; padding:12px 13px; position:relative; }
+  .tnode .tn-name { font-family:var(--font-head); font-weight:700; color:#fff; font-size:14.5px; }
+  .tnode .tn-tag { font-size:10px; font-family:var(--font-mono); padding:1px 6px; border-radius:9px; margin-left:6px; vertical-align:middle; }
+  .tnode .tn-desc { color:var(--dim); font-size:12px; margin-top:5px; line-height:1.45; }
+  .tnode.human { border-left:3px solid var(--steel); } .tnode.human .tn-tag{ background:#13313d; color:var(--steel); border:1px solid #2a5566; }
+  .tnode.graft { border-left:3px solid var(--violet); background:linear-gradient(#241433,#1a1226); } .tnode.graft .tn-tag{ background:var(--violet-deep); color:var(--violet); border:1px solid #4a2f66; }
+  .tnode .tn-cost { color:#ff8aa8; font-size:11px; margin-top:6px; font-family:var(--font-mono); }
+  .tree-conn { width:2px; height:22px; background:linear-gradient(var(--line-2),transparent); }
+  .tree-or { font-family:var(--font-mono); font-size:11px; color:var(--faint); margin:6px 0; }
+  .tree-foot { font-size:11.5px; color:var(--dim); text-align:center; margin-top:6px; line-height:1.5; }
+  .tree-foot b{ color:var(--steel); } .tree-foot i{ color:var(--violet); font-style:normal; }
+
+  /* ─── frame polish: wanted-poster intro · timber town · tree map ─── */
+  .intro-story { position:relative; padding:20px 24px; border:1px solid var(--line-2); border-radius:8px;
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.010) 0 1px, transparent 1px 96px),
+      linear-gradient(#1d160d,#160f08);
+    box-shadow: inset 0 0 0 4px rgba(74,61,40,.22), inset 0 0 70px #0008; }
+  .intro-kick::before, .intro-kick::after { content:'—'; color:var(--line-2); margin:0 10px; }
+  .intro-foot { font-family:var(--font-mono); font-size:10.5px; letter-spacing:3px; text-transform:uppercase; color:var(--faint); text-align:center; }
+  .intro-foot::before, .intro-foot::after { content:' ·····'; color:var(--line-2); }
+  /* faint vertical timber seams behind the town tiles */
+  .town-scene::before { content:''; position:absolute; inset:0; pointer-events:none; z-index:1; opacity:.6;
+    background: repeating-linear-gradient(90deg, rgba(0,0,0,.16) 0 1px, transparent 1px 110px); }
+  .town-grid, .town-head { position:relative; z-index:2; }
+  /* skill-tree: path column headers + clearer fork */
+  .tree-paths { display:flex; gap:30px; justify-content:center; margin-bottom:4px; position:relative; z-index:2; }
+  .tree-paths span { width:240px; text-align:center; font-family:var(--font-mono); font-size:10px; letter-spacing:2px; text-transform:uppercase; }
+  .tree-paths .ph { color:var(--steel); } .tree-paths .pg { color:var(--violet); }
+  .tnode { transition:transform .12s, box-shadow .12s; }
+  .tnode.human:hover, .tnode.graft:hover { transform:translateY(-2px); box-shadow:0 6px 16px #0007; }
+
+  /* ─── responsive: iPad & phone ─── */
+  @media (max-width: 1100px){
+    body { padding:12px; gap:10px; }
+    h1 { font-size:21px; }
+    .meta { width:100%; max-width:100%; padding:16px; }
+    .wrap { flex-direction:column; width:100%; gap:12px; }
+    .wrap > div:first-child { width:100%; }
+    .panel { width:100% !important; max-width:100%; }
+    #boardvp { width:100%; height:min(calc(var(--tile)*8.6), 58vh); }
+    .legend { font-size:11px; }
+    .intro-title { font-size:30px; }
+    .intro-story { font-size:14px; }
+    .mcols { flex-direction:column; }
+    .roster-strip .mcard { min-width:140px; }
+  }
+  @media (max-width: 640px){
+    body { padding:8px; }
+    h1 { font-size:18px; }
+    .sub { font-size:11px; }
+    .town-grid { grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; }
+    .bldg-tile .ico { font-size:28px; }
+    .intro-title { font-size:24px; }
+    .intro-art { aspect-ratio:4/3; }
+    .tree-fork { gap:12px; }
+    .tnode { width:100%; max-width:300px; }
+    .tree-or { display:none; }
+  }
+
+  /* ── Speaker portrait HUD ── */
+  #rwt-phud { position:fixed; bottom:10px; left:10px; z-index:180; width:80px; height:80px;
+    border:2px solid #5a4a2a; border-radius:6px; background:#0f0a06; opacity:1;
+    box-shadow:0 4px 16px #000a, inset 0 0 0 1px #ffffff06;
+    transition:opacity .22s, transform .22s; pointer-events:none; overflow:hidden; }
+  #rwt-phud.hidden { opacity:0; transform:translateY(8px); }
+  #rwt-phud img { width:100%; height:100%; image-rendering:pixelated; object-fit:cover; display:block; }
 </style>
 </head>
 <body>
@@ -221,6 +360,8 @@
 <div class="sub">Frontier company vs the things crossing the Drop · 2 actions/soldier · select a trooper → Move / Shoot / Overwatch / Hunker / Grenade / Heal / Rally</div>
 <div class="diffrow" id="diffrow"></div>
 
+<div id="intro"></div>
+<div id="trees"></div>
 <div id="meta" class="meta" style="display:none"></div>
 
 <div class="wrap" id="wrap">
@@ -461,51 +602,147 @@ function maybeNickname(e){ if(e.nickname) return;
 // ── screen switching ──
 function setScreen(s){ uiScreen=s;
   if(window.Snd) Snd.music((s==='combat')?'audio/sfx/the-drop.mp3':'audio/music/title-theme.mp3', (s==='combat')?0.2:0.32);
-  const meta=document.getElementById('meta'), wrap=document.getElementById('wrap'), dr=document.getElementById('diffrow');
-  if(meta) meta.style.display=(s==='combat')?'none':'flex';
-  if(wrap) wrap.style.display=(s==='combat')?'flex':'none';
-  if(dr)   dr.style.display=(s==='combat')?'flex':'none';
+  const show=(id,disp)=>{ const el=document.getElementById(id); if(el) el.style.display=disp; };
+  const isCombat=(s==='combat');
+  show('intro', s==='intro'?'flex':'none');
+  show('trees', s==='trees'?'flex':'none');
+  show('meta',  (s==='frontier'||s==='debrief')?'flex':'none');
+  show('wrap',  isCombat?'flex':'none');
+  show('diffrow', isCombat?'flex':'none');
+  const sub=document.querySelector('.sub'); if(sub) sub.style.display=isCombat?'block':'none';
+  const h1=document.querySelector('h1'); if(h1) h1.style.display=(s==='intro')?'none':'block';
+  if(s==='intro')    renderIntro();
   if(s==='frontier') renderFrontier();
+  if(s==='trees')    renderTrees();
 }
 
-// ── the Frontier ──
-function renderFrontier(){
-  const m=document.getElementById('meta'), c=camp; if(!m||!c) return;
-  const idx=Math.min(c.missionIndex, CHAPTER.length-1);
-  const chap = c.cleared ? '✔ Rim chapter cleared — the first Forge stands.' : `Next sortie: ${CHAPTER[idx].name} (${MISSIONS[CHAPTER[idx].type].desc})`;
-  let html = `<h2>The Frontier — holding the Rim</h2><div class="ftag">${chap}</div>`+
-    `<div class="res">⛏ Iron <b>${c.iron}</b>${c.upgradedThisVisit?' · <span style="color:#8a7d63">one build per return — spent</span>':''} · sortie ${Math.min(c.missionIndex+1,CHAPTER.length)}/${CHAPTER.length}</div>`+
-    `<div class="mcols">`;
-  // company
-  html += `<div class="mcol"><div class="ftag">Company</div>`;
+// ── intro / opening sequence ──
+function renderIntro(){ const el=document.getElementById('intro'); if(!el) return;
+  el.innerHTML =
+    `<div class="intro-art" id="introArt" data-src><div class="glow"></div><div class="horizon"></div></div>`+
+    `<p class="intro-kick">A weird-West frontier · the edge of the Drop</p>`+
+    `<h1 class="intro-title">RINGWARD <b>TACTICS</b></h1>`+
+    `<div class="intro-story">`+
+      `<p class="lede">Seventy-five years ago the ground opened, and something on the other side started crossing over.</p>`+
+      `<p>You command the last militia company holding the <b>Rim</b> — the thin line of fences and lamplight between the townships and the things that climb out of the Drop. Each one you put down buys another night.</p>`+
+      `<p>But the only way to match what's coming is to let a little of it <i>into your own people</i> — graft monster onto soldier, trade a piece of who they were for the power to hold the line. Every choice moves them further from human, and there's no coming back from far enough.</p>`+
+      `<p>Hold the Rim. Build the Forge. Decide what your company is willing to become.</p>`+
+    `</div>`+
+    `<div class="intro-foot">By order of the Frontier Company</div>`+
+    `<div class="intro-btns">`+
+      `<button class="mbtn go" onclick="beginFromIntro()">Hold the Rim ▸</button>`+
+      `<button class="mbtn" onclick="setScreen('frontier')">Skip to the Frontier</button>`+
+    `</div>`;
+  // auto-upgrade to real art when it lands at art/tactics/intro.png
+  const im=new Image(); im.onload=()=>{ const a=document.getElementById('introArt'); if(a){ a.style.backgroundImage="url('art/tactics/intro.png')"; a.removeAttribute('data-src'); a.querySelectorAll('.glow,.horizon').forEach(n=>n.remove()); } }; im.src='art/tactics/intro.png';
+}
+function beginFromIntro(){ if(camp){ camp.introSeen=true; saveCamp(); } setScreen('frontier'); }
+// drop-in art: when the file exists, paint it as the scene background (gradient stays as fallback)
+function bgUpgrade(sel, path){ const el=document.querySelector(sel); if(!el) return; const im=new Image();
+  im.onload=()=>{ const e=document.querySelector(sel); if(e) e.style.backgroundImage=`linear-gradient(rgba(15,11,6,.55),rgba(15,11,6,.78)), url('${path}')`; };
+  im.src=path; }
+
+// ── the Frontier — a clickable town ──
+const BLDG_ICON = { Forge:'🔥', Infirmary:'⛑️', Watchtower:'🗼', Hall:'🏛️' };
+function companyStripHTML(c){
+  let h='';
   for(const r of c.roster){
-    if(r.dead){ html+=`<div class="mcard dead"><span class="nmln">${r.name}</span> — fallen</div>`; continue; }
+    if(r.dead){ h+=`<div class="mcard dead"><span class="nmln">${r.name}</span> — fallen</div>`; continue; }
     const pv=rosterPreview(r), maxHp=pv.maxHp, hp=Math.max(1,maxHp-(r.wound||0));
-    html+=`<div class="mcard"><span class="nmln">${r.name}</span>${r.nickname?` <span class="nk">“${r.nickname}”</span>`:''} · ${r.cls} · R${r.rank}`+
+    h+=`<div class="mcard"><span class="nmln">${r.name}</span>${r.nickname?` <span class="nk">“${r.nickname}”</span>`:''} · ${r.cls} · R${r.rank}`+
       `<div class="sub2">HP ${hp}/${maxHp} · Humanity ${r.humanity} · Taint ${r.taint}${(r.crafts&&r.crafts.length)?' · '+r.crafts.length+' craft':''}${r.wound?' · <span style="color:#ff8aa8">wounded</span>':''}</div>`+
       `<div class="bar2"><i style="width:${Math.round(100*hp/maxHp)}%;background:linear-gradient(#6dff9b,#2fae5f)"></i></div></div>`;
   }
-  if(c.cairn.length) html+=`<div class="cairn">⚰ The Cairn: ${c.cairn.map(x=>x.name+(x.nickname?` “${x.nickname}”`:'')).join(' · ')}</div>`;
-  html += `</div>`;
-  // buildings
-  html += `<div class="mcol"><div class="ftag">Buildings — one advance per return, scarce Iron</div>`;
-  for(const b of BUILDINGS){ const tier=c.buildings[b.key], cost=upgradeCost(tier);
-    const can=!c.upgradedThisVisit && tier<3 && c.iron>=cost;
-    html+=`<div class="bldg"><div><b>${b.label}</b> <span class="tiers">${'◆'.repeat(tier)+'◇'.repeat(3-tier)}</span><div class="sub2">${b.blurb}</div></div>`+
-      `<button class="mbtn" ${can?'':'disabled'} onclick="advanceBuilding('${b.key}')">${tier>=3?'maxed':'Build · '+cost+'⛏'}</button></div>`;
+  return h;
+}
+function renderFrontier(){
+  const m=document.getElementById('meta'), c=camp; if(!m||!c) return;
+  const idx=Math.min(c.missionIndex, CHAPTER.length-1);
+  const chap = c.cleared ? '✔ Rim chapter cleared — the first Forge stands.' : `Next sortie: ${CHAPTER[idx].name} — ${MISSIONS[CHAPTER[idx].type].name}`;
+  const alive=c.roster.filter(r=>!r.dead).length;
+  let html = `<div class="townwrap">`+
+    `<div class="town-head"><div><h2>The Frontier</h2><div class="ftag">${chap}</div></div>`+
+    `<div class="res">⛏ Iron <b>${c.iron}</b>${c.upgradedThisVisit?' · <span style="color:#8a7d63">build spent this return</span>':''} · sortie ${Math.min(c.missionIndex+1,CHAPTER.length)}/${CHAPTER.length}<br><button class="mbtn" style="margin-top:6px;padding:4px 10px;font-size:11.5px" onclick="setScreen('intro')">↺ Story</button></div></div>`+
+    `<div class="town-scene"><div class="town-grid">`;
+  // War Table — deploy / launch
+  if(alive>0) html += `<button class="bldg-tile go" onclick="deployNext()"><span class="ico">🗺️</span><span class="bname">War Table</span><div class="bdesc">Deploy ▸ ${CHAPTER[idx].name}</div></button>`;
+  else        html += `<button class="bldg-tile go" onclick="resetCamp()"><span class="ico">🗺️</span><span class="bname">War Table</span><div class="bdesc">The company is gone — raise a new one.</div></button>`;
+  // the four buildings
+  for(const b of BUILDINGS){ const tier=c.buildings[b.key];
+    const graftable=(b.key==='Forge' && tier>=1);
+    html += `<button class="bldg-tile${graftable?' graftable':''}" onclick="openBldg('${b.key}')">`+
+      `<span class="badge">${'◆'.repeat(tier)+'◇'.repeat(3-tier)}</span>`+
+      `<span class="ico">${BLDG_ICON[b.key]||'🏚️'}</span><span class="bname">${b.label}</span>`+
+      `<div class="bdesc">${b.blurb}</div></button>`;
   }
-  if(c.buildings.Forge>=1){
-    html+=`<div class="bldg graft" style="border-color:#6a3a72"><div><b>Forge ▸ ${FORGE_CRAFT.name}</b><div class="sub2">${FORGE_CRAFT.desc}</div></div>`+
-      `<button class="mbtn graft" ${c.iron>=FORGE_CRAFT.cost?'':'disabled'} onclick="openForge()">Craft · ${FORGE_CRAFT.cost}⛏</button></div>`;
-  }
+  // Skill Trees
+  html += `<button class="bldg-tile" onclick="setScreen('trees')"><span class="ico">🌿</span><span class="bname">Skill Trees</span><div class="bdesc">What each class can become — human path vs the graft.</div></button>`;
+  // Cairn
+  html += `<button class="bldg-tile" onclick="openCairn()"><span class="ico">⚰️</span><span class="bname">The Cairn</span><div class="bdesc">${c.cairn.length?c.cairn.length+' fallen — honor them.':'No one has fallen. Keep it that way.'}</div></button>`;
   html += `</div></div>`;
+  // company strip
+  html += `<div class="town-detail"><h3>Company</h3><div class="roster-strip">${companyStripHTML(c)}</div></div>`;
+  // toggles
   html += `<div class="togrow"><label><input type="checkbox" id="ironmanchk" ${c.ironman?'checked':''} onchange="toggleIronman()"> Ironman — the fallen stay fallen</label>`+
     `<button class="mbtn danger" onclick="if(confirm('Wipe the campaign and start fresh?'))resetCamp()">Reset campaign</button></div>`;
-  const alive=c.roster.filter(r=>!r.dead).length;
-  if(alive===0) html += `<div class="res" style="color:#ff8aa8">The company is gone — every name rests on the Cairn. There's no one left to deploy.</div>`+
-    `<button class="mbtn go" onclick="resetCamp()">Raise a new company</button>`;
-  else html += `<button class="mbtn go" onclick="deployNext()">Deploy ▸ ${CHAPTER[idx].name}</button>`;
+  html += `</div>`;
   m.innerHTML=html;
+  bgUpgrade('.town-scene','art/tactics/town-bg.png');
+}
+// building detail panels (open into the same #meta container, with a back button)
+function openBldg(key){ const m=document.getElementById('meta'), c=camp; if(!m||!c) return;
+  const b=BUILDINGS.find(x=>x.key===key); if(!b) return;
+  const tier=c.buildings[key], cost=upgradeCost(tier), can=!c.upgradedThisVisit && tier<3 && c.iron>=cost;
+  const effect={ Forge:'Crafts grafts and weapons — and building it raises the first Forge, the chapter gate.', Infirmary:'Each tier built clears every soldier\'s wounds on the spot.', Watchtower:'+1 squad sight per tier, out in the field — see trouble before it sees you.', Hall:'Each tier built restores +10 Humanity to the whole company.' }[key]||b.blurb;
+  let html = `<div class="townwrap"><div class="town-head"><div><h2><span class="ico">${BLDG_ICON[key]||'🏚️'}</span> ${b.label}</h2>`+
+    `<div class="ftag">Tier <b style="color:var(--amber)">${'◆'.repeat(tier)+'◇'.repeat(3-tier)}</b> · one advance per return</div></div>`+
+    `<div class="res">⛏ Iron <b>${c.iron}</b></div></div>`+
+    `<div class="town-detail"><div class="bdesc" style="font-size:13px;color:var(--ink);line-height:1.55">${effect}</div>`+
+    `<div style="margin-top:12px"><button class="mbtn go" ${can?'':'disabled'} onclick="advanceBuilding('${key}')">${tier>=3?'Fully built':(c.upgradedThisVisit?'Build spent this return':(c.iron<cost?('Need '+cost+'⛏'):('Advance · '+cost+'⛏')))}</button></div>`;
+  if(key==='Forge' && tier>=1){
+    html += `<div class="town-detail graft" style="margin-top:12px;border-color:#6a3a72"><h3 style="color:#d8b8f0">▸ ${FORGE_CRAFT.name}</h3>`+
+      `<div class="bdesc" style="font-size:12.5px">${FORGE_CRAFT.desc}. Taint +${FORGE_CRAFT.taint}, Humanity ${FORGE_CRAFT.hum}.</div>`+
+      `<div style="margin-top:10px"><button class="mbtn graft" ${c.iron>=FORGE_CRAFT.cost?'':'disabled'} onclick="openForge()">Craft · ${FORGE_CRAFT.cost}⛏</button></div></div>`;
+  }
+  html += `</div><button class="mbtn town-back" onclick="renderFrontier()">← back to the Frontier</button></div>`;
+  m.innerHTML=html;
+}
+function openCairn(){ const m=document.getElementById('meta'), c=camp; if(!m||!c) return;
+  let html = `<div class="townwrap"><div class="town-head"><div><h2><span class="ico">⚰️</span> The Cairn</h2><div class="ftag">Every name the Rim took.</div></div></div>`+
+    `<div class="town-detail">`;
+  if(!c.cairn.length) html += `<div class="bdesc" style="font-size:13px">No stones yet. Keep your people alive and it stays that way.</div>`;
+  else for(const x of c.cairn) html += `<div class="mcard"><span class="nmln">${x.name}</span>${x.nickname?` <span class="nk">“${x.nickname}”</span>`:''} · ${x.cls||''}<div class="sub2">${(x.missions||0)} mission${x.missions===1?'':'s'} survived · fell holding the Rim</div></div>`;
+  html += `</div><button class="mbtn town-back" onclick="renderFrontier()">← back to the Frontier</button></div>`;
+  m.innerHTML=html;
+}
+
+// ── skill-tree map ──
+const TREE_ROLE = { Sharpshooter:'the long shot', Ironclad:'the wall', Bombardier:'the boom', Sawbones:'the mender', Outrider:'the scout', Bannerman:'the heart' };
+let treeClass='Sharpshooter';
+function selectTree(cls){ treeClass=cls; renderTrees(); }
+function nodeHTML(opt){
+  const kind=opt.graft?'graft':(opt.human?'human':'');
+  const tag=opt.graft?'<span class="tn-tag">GRAFT</span>':(opt.human?'<span class="tn-tag">HUMAN</span>':'');
+  const cost=opt.graft?`<div class="tn-cost">Taint +${opt.taint} · Humanity ${opt.hum}</div>`:'';
+  return `<div class="tnode ${kind}"><div class="tn-name">${opt.name}${tag}</div><div class="tn-desc">${opt.desc}</div>${cost}</div>`;
+}
+function renderTrees(){ const el=document.getElementById('trees'); if(!el) return;
+  const tabs = Object.keys(TREES).map(cls=>`<button class="tree-tab${cls===treeClass?' on':''}" onclick="selectTree('${cls}')">${cls}</button>`).join('');
+  const ranks=TREES[treeClass]||[];
+  let map='';
+  ranks.forEach((rk,i)=>{
+    if(i>0) map += `<div class="tree-conn"></div>`;
+    map += `<div class="tree-rank"><div class="rlabel">${rk.label}${i>0?' · choose your path':''}</div>`+
+      `<div class="tree-fork">${nodeHTML(rk.A)}<div class="tree-or" style="align-self:center">— or —</div>${nodeHTML(rk.B)}</div></div>`;
+  });
+  el.innerHTML =
+    `<div class="town-head"><div><h2 style="font-family:var(--font-head);color:#fff;margin:0;font-size:21px">Skill Trees</h2>`+
+      `<div class="ftag">${treeClass} — <i style="color:var(--amber);font-style:normal">${TREE_ROLE[treeClass]||''}</i>. Soldiers pick one option each rank-up, out on a mission.</div></div></div>`+
+    `<div class="tree-tabs">${tabs}</div>`+
+    `<div class="trees-bg"><div class="tree-paths"><span class="ph">◷ Human path</span><span class="pg">❖ Graft path</span></div><div class="tree-map">${map}</div></div>`+
+    `<div class="tree-foot"><b>Human path</b> holds who they are. <i>Graft path</i> is stronger but spends Humanity and feeds the Taint — the farther down, the less of them is left. Picks happen on rank-up in combat; this is the map of what's possible.</div>`+
+    `<button class="mbtn town-back" onclick="setScreen('frontier')">← back to the Frontier</button>`;
+  bgUpgrade('.trees-bg','art/tactics/skilltree-bg.png');
 }
 function toggleIronman(){ const chk=document.getElementById('ironmanchk'); if(chk){ camp.ironman=chk.checked; saveCamp(); } }
 function advanceBuilding(key){ const tier=camp.buildings[key], cost=upgradeCost(tier);
@@ -514,7 +751,7 @@ function advanceBuilding(key){ const tier=camp.buildings[key], cost=upgradeCost(
   if(key==='Infirmary'){ for(const r of camp.roster){ if(!r.dead) r.wound=0; } }
   if(key==='Hall'){ for(const r of camp.roster){ if(!r.dead) r.humanity=Math.min(100,r.humanity+10); } }
   if(key==='Forge' && !camp.cleared){ camp.cleared=true; }
-  saveCamp(); renderFrontier();
+  saveCamp(); openBldg(key);
 }
 function deployNext(){ const idx=Math.min(camp.missionIndex, CHAPTER.length-1);
   camp.upgradedThisVisit=false; camp._snapshot=JSON.stringify(camp.roster);
@@ -561,7 +798,7 @@ function debriefChoose(k){
   if(k==='iron') camp.iron+=2;
   else if(k==='heal'){ for(const r of camp.roster) if(!r.dead) r.wound=0; }
   else if(k==='hum'){ for(const r of camp.roster) if(!r.dead) r.humanity=Math.min(100,r.humanity+12); }
-  saveCamp(); setScreen('frontier');
+  saveCamp(); if(window.Snd) Snd.vo('handler-frontier-1'); setScreen('frontier');
 }
 
 // ── skill trees: one-of-two per rank; ≥1 rank is HUMAN tech vs MONSTER graft ──
@@ -663,7 +900,7 @@ function computeVisible(){
 }
 function wakePod(pid){
   let any=false; for(const e of units){ if(e.alive&&e.side==='enemy'&&e.pod===pid&&!e.awake){ e.awake=true; e.justWoke=true; any=true; } }
-  if(any){ log('b','⚠ A pack stirs — you are spotted!'); bark('h','Spotter: Contact. They know we are here now.','spotter-contact-a'); }
+  if(any){ log('b','⚠ A pack stirs — you are spotted!'); bark('h','Spotter: Contact. They know we are here now.','spotter-contact-'+['a','b','c'][Math.floor(rng()*3)]); }
 }
 // when a pod activates it gets a free scramble into cover (XCOM-style reposition-on-reveal)
 function bestRepositionTile(e){
@@ -734,7 +971,7 @@ function resolveShot(shooter,target,opts={}){
     else {
       tracer(shooter,target,'miss'); floatText(target,'MISS','miss');
       log('l', `${nm(shooter)} fires at ${nm(target)} — MISS${tag} (${hit}%).`);
-      if(shooter.side==='player'){ tut(6); if(rng()<0.5) bark('h','Spotter: Damn. Reset, find the angle.','spotter-miss-a'); if(target.side==='enemy'&&target.pod) wakePod(target.pod); }
+      if(shooter.side==='player'){ tut(6); const mp=CHAR_VO[shooter.cls]; if(mp==='eli'&&rng()<0.55){if(window.Snd)Snd.vo('eli-miss-1');}else if(mp==='cal'&&rng()<0.55){if(window.Snd)Snd.vo('cal-miss-1');}else if(rng()<0.5){bark('h','Spotter: Damn. Reset, find the angle.','spotter-miss-a');} if(target.side==='enemy'&&target.pod) wakePod(target.pod); }
       return {hit:false};
     }
   }
@@ -745,8 +982,12 @@ function resolveShot(shooter,target,opts={}){
   tracer(shooter,target,'hit'); floatText(target, '-'+dmg, isCrit?'crit':'hit'); if(window.Snd) Snd.sfx('payoff-hit', isCrit?0.7:0.5);
   if(isCrit) log('c', `${nm(shooter)} CRITS ${nm(target)} for ${dmg}!${isFlanked(shooter,target)?' (flanked)':''}`);
   else log(shooter.side==='player'?'g':'b', `${nm(shooter)} hits ${nm(target)} for ${dmg}.${tag}`);
-  if(target.hp<=0){ target.alive=false; target.hp=0; log(target.side==='player'?'b':'g', `${nm(target)} is down.`); if(window.Snd&&target.side==='player') Snd.sfx('squad-down',0.6);
-    if(target.side==='enemy'&&shooter.side==='player'){ shooter.kills=(shooter.kills||0)+1; bark('h','Spotter: That\'s one down.','spotter-kill-a'); if(eligibleToPromote(shooter)) log('c', `★ ${nm(shooter)} can advance — select them to choose a path.`); }
+  // per-character hit/crit barks (only when target survives; kill barks below handle the death case)
+  if(shooter.side==='player'&&target.hp>0){const hp=CHAR_VO[shooter.cls];if(isCrit){const cv=hp==='eli'?'eli-crit-1':hp==='cal'?'cal-crit-1':'spotter-crit-1';if(rng()<0.65&&window.Snd)Snd.vo(cv);}else{if(hp==='eli'&&rng()<0.45){if(window.Snd)Snd.vo('eli-hit-'+(rng()<0.5?1:2));}else if(hp==='cal'&&rng()<0.35){if(window.Snd)Snd.vo('cal-hit-1');}else if(hp==='ruth'&&rng()<0.35){if(window.Snd)Snd.vo('ruth-hit-1');}}}
+  if(shooter.side==='enemy'&&target.side==='player'&&isFlanked(shooter,target)&&rng()<0.35){const fp=CHAR_VO[target.cls];if(fp==='ruth'){if(window.Snd)Snd.vo('ruth-flanked-1');}else{bark('h','Spotter: You\'re exposed — get to cover.','spotter-flanked-1');}}
+  if(target.hp<=0){ target.alive=false; target.hp=0; log(target.side==='player'?'b':'g', `${nm(target)} is down.`);
+    if(target.side==='player'){if(window.Snd)Snd.sfx('squad-down',0.6);const dp=CHAR_VO[target.cls];if(dp==='mara'){if(window.Snd)Snd.vo('mara-down-1');}else if(dp==='tom'){if(window.Snd)Snd.vo('tom-down-1');}else if(rng()<0.4&&window.Snd)Snd.vo('spotter-down-1');}
+    if(target.side==='enemy'&&shooter.side==='player'){ shooter.kills=(shooter.kills||0)+1; const kp=CHAR_VO[shooter.cls];if(kp==='tom')bark('h','Tom: One less crossin\' tonight.','tom-kill-1');else if(kp==='ruth')bark('h','Ruth: Stay down.','ruth-kill-1');else bark('h','Spotter: That\'s one down.','spotter-kill-a'); if(eligibleToPromote(shooter)) log('c', `★ ${nm(shooter)} can advance — select them to choose a path.`); }
   }
   if(shooter.side==='player'&&target.side==='enemy'&&target.pod) wakePod(target.pod);   // opening fire alerts the pack
   return {hit:true,isCrit,dmg};
@@ -755,7 +996,7 @@ function resolveShot(shooter,target,opts={}){
 function doGrenade(shooter, tc, tr){
   if(window.RWCamera && tileEls[tr] && tileEls[tr][tc]) RWCamera.center(tileEls[tr][tc], true);   // pan to the blast like a shot
   flashAttack(shooter);
-  log('g', `${nm(shooter)} lobs a grenade at (${tc},${tr}).`); bark('h','Handler: Frag out — cover\'s coming down.','cal-grenade-a'); if(window.Snd) Snd.sfx('payoff-hit',0.7);
+  log('g', `${nm(shooter)} lobs a grenade at (${tc},${tr}).`); bark('h','Handler: Frag out — cover\'s coming down.','cal-grenade-'+(rng()<0.5?'a':'b')); if(window.Snd) Snd.sfx('payoff-hit',0.7);
   for(let r=tr-1;r<=tr+1;r++)for(let c=tc-1;c<=tc+1;c++){ if(!inB(c,r)) continue;
     const u=unitAt(c,r); if(u){ const dmg=4+Math.floor(rng()*4)+(shooter.grenadeBonus||0); u.hp-=dmg; flashHit(u); log(u.side==='player'?'b':'g', `  ${nm(u)} caught in the blast (-${dmg}).`); if(u.hp<=0){u.alive=false;u.hp=0; log(u.side==='player'?'b':'g',`  ${nm(u)} is down.`); if(u.side==='enemy'){shooter.kills=(shooter.kills||0)+1;}} if(u.side==='enemy'&&u.pod) wakePod(u.pod); }
     destroyCoverAt(c,r);
@@ -796,6 +1037,8 @@ function reachable(u){
 // Per-class / per-family crisp pixel sprites (MJ design → PixelLab image-to-pixelart, 128px RGBA).
 // Keyed by the class/family NAME so makeUnit can look up by cls directly. No tint needed — each
 // sprite carries its own identity now.
+// maps class name → VO filename prefix for per-soldier barks
+const CHAR_VO = {Sharpshooter:'eli',Ironclad:'ruth',Bombardier:'cal',Sawbones:'mara',Outrider:'wren',Bannerman:'tom'};
 const SPRITE_DIRS = {
   Sharpshooter:{ static:'art/tactics/sharpshooter.png' },
   Ironclad:{ static:'art/tactics/ironclad.png' },
@@ -1115,6 +1358,7 @@ function setPreview(html){ document.getElementById('preview').innerHTML = html||
 function moveUnit(u,c,r){
   const from={c:u.c,r:u.r};
   u.c=c; u.r=r; u.movedThisTurn=true; u.actions--; clearPath();
+  if(u.side==='player'){const mv=CHAR_VO[u.cls];if(mv&&(mv==='eli'||mv==='ruth'||mv==='wren')&&rng()<0.28){const v=mv==='wren'&&rng()<0.5?2:1;if(window.Snd)Snd.vo(mv+'-move-'+v);}}
   triggerOverwatch(u, from, {c,r});
   if(u.actions<1 || !canShoot(u)) { /* stays selected */ }
   mode='idle'; setPreview(''); render();
@@ -1123,13 +1367,13 @@ function moveUnit(u,c,r){
 }
 function playerShoot(u,t){ if(window.RWCamera && occEls[t.id]) RWCamera.center(occEls[t.id].o, true); resolveShot(u,t); u.shotThisTurn=true; u.actions=0; mode='idle'; setPreview(''); render(); checkEnd(); }
 function playerGrenade(u,c,r){ doGrenade(u,c,r); u.shotThisTurn=true; u.actions=0; mode='idle'; setPreview(''); render(); checkEnd(); }
-function act_overwatch(u){ u.overwatch=true; u.actions=0; u.shotThisTurn=true; log('l',`${nm(u)} sets Overwatch.`); mode='idle'; render(); }
+function act_overwatch(u){ u.overwatch=true; u.actions=0; u.shotThisTurn=true; log('l',`${nm(u)} sets Overwatch.`); const owp=CHAR_VO[u.cls];if(u.side==='player'&&(owp==='eli'||owp==='ruth')&&window.Snd)Snd.vo(owp+'-overwatch-1'); mode='idle'; render(); }
 function act_hunker(u){ u.hunkered=true; u.actions=0; log('l',`${nm(u)} hunkers down.`); mode='idle'; render(); }
 // ── support actions (Sawbones Heal, Bannerman Rally) ──
 const SUPPORT_RANGE=6;
 function validSupport(u,ally,m){ return ally && ally.side===u.side && ally!==u && ally.alive && cheb(u,ally)<=SUPPORT_RANGE && hasLOS(u,ally) && (m!=='heal'||ally.hp<ally.maxHp); }
-function doHeal(u,t){ const amt=Math.min(HEAL_AMOUNT+(u.healBonus||0),t.maxHp-t.hp); t.hp+=amt; u.heals--; u.actions=0; u.shotThisTurn=true; flashAttack(u); flashHit(t); floatText(t,'+'+amt,'heal'); log('g',`${nm(u)} patches up ${nm(t)} (+${amt}).`); bark('h','Handler: Stay with me — you\'re alright.','mara-heal-a'); if(window.Snd)Snd.sfx('heal'); mode='idle'; render(); checkEnd(); }
-function doRally(u,t){ t.actions+=1; u.rallies--; u.actions=0; u.shotThisTurn=true; flashAttack(u); floatText(t,'RALLY','rally'); log('g',`${nm(u)} rallies ${nm(t)} — a free action!`); bark('h','Handler: On me! Move!','tom-rally-a'); mode='idle'; render(); }
+function doHeal(u,t){ const amt=Math.min(HEAL_AMOUNT+(u.healBonus||0),t.maxHp-t.hp); t.hp+=amt; u.heals--; u.actions=0; u.shotThisTurn=true; flashAttack(u); flashHit(t); floatText(t,'+'+amt,'heal'); log('g',`${nm(u)} patches up ${nm(t)} (+${amt}).`); bark('h','Handler: Stay with me — you\'re alright.','mara-heal-'+(rng()<0.5?'a':'b')); if(window.Snd)Snd.sfx('heal'); mode='idle'; render(); checkEnd(); }
+function doRally(u,t){ t.actions+=1; u.rallies--; u.actions=0; u.shotThisTurn=true; flashAttack(u); floatText(t,'RALLY','rally'); log('g',`${nm(u)} rallies ${nm(t)} — a free action!`); bark('h','Handler: On me! Move!','tom-rally-'+(rng()<0.5?'a':'b')); mode='idle'; render(); }
 function doMark(u,t){ t.marked=true; u.marks--; u.actions=0; u.shotThisTurn=true; flashAttack(u); floatText(t,'MARKED','rally'); log('g',`${nm(u)} marks ${nm(t)} — no cover, nowhere to fly.`); bark('h','Spotter: Marked. Put it down.','wren-mark-a'); mode='idle'; render(); }
 // ── promotion / skill trees ──
 function eligibleToPromote(u){ return u && u.side==='player' && TREES[u.cls] && u.rank < TREES[u.cls].length && u.kills > u.rank; }
@@ -1267,6 +1511,8 @@ const Snd=(function(){
   const voFix=(id)=>{ // reconcile manifest ids with the audio instance's actual filenames
     if(id==='handler-cleared') return 'handler-sector-cleared-1';
     if(id==='handler-wiped') return 'handler-squad-wiped-1';
+    if(id==='spotter-rite-break') return 'spotter-rite-breaking-1';
+    if(id==='spotter-hold-win') return 'spotter-hold-won-1';
     const m=id.match(/^spotter-tut-0*(\d+)$/); if(m) return 'spotter-tutorial-'+m[1];
     return id.replace(/-([abc])$/,(s,l)=>'-'+({a:1,b:2,c:3}[l])); };
   const vo=(id,vol)=>{ if(muted||!id)return; try{ if(!voEl)voEl=new Audio(); voEl.pause(); const cands=[...new Set([voFix(id), id+'-1', id])]; let i=0; const go=()=>{ if(i>=cands.length){ voEl.onerror=null; return; } voEl.onerror=()=>{ i++; go(); }; voEl.src='audio/vo/'+cands[i]+'.mp3'; voEl.volume=(vol==null?0.95:vol)*vols.voice; voEl.play().catch(()=>{}); }; go(); }catch(e){} };
@@ -1295,6 +1541,59 @@ const Snd=(function(){
   return { sfx, vo, music, setMute, setVol, isMuted:()=>muted };
 })();
 window.Snd=Snd;
+
+// ───────── speaker portrait HUD ─────────
+// Shows the speaking character's 128px pixel bust in the bottom-left corner whenever a VO fires.
+// Selects the emotion-appropriate variant from the inpainted emotion set.
+(function(){
+  let _timer=null;
+  const PHUD_SPEAKERS=['spotter','handler','eli','ruth','cal','mara','wren','tom'];
+  function voSpeaker(id){ const m=id.match(/^(spotter|handler|eli|ruth|cal|mara|wren|tom)-/); return m?m[1]:null; }
+  function voEmotion(id){
+    if(/-(miss|fury)-/.test(id)||/-miss-\d/.test(id))                       return 'fury';
+    if(/-(crit|kill|triumph|cleared|hold-won|rite-breaking)-/.test(id)||/-crit-\d|-kill-\d|-hold-won|-rite-breaking/.test(id)) return 'triumph';
+    if(/-(contact|flanked|blight|alarm)-/.test(id)||/-contact-\d|-flanked-\d|-blight-\d/.test(id)) return 'alarm';
+    if(/-(down|wiped|grief|cairn)-/.test(id)||/-down-\d|-wiped-\d|-cairn-\d/.test(id))             return 'grief';
+    if(/-(promote-graft)/.test(id))                                          return 'alarm';
+    if(/-(hit|rally|heal|overwatch|mark|promote-human|deploy|frontier)-/.test(id)||/-hit-\d|-rally-\d|-heal-\d|-overwatch-\d|-mark-\d|-deploy-\d|-frontier-\d/.test(id)) return 'determined';
+    if(/tutorial/.test(id))                                                  return null; // steady
+    return null;
+  }
+  // Per-character emotion collapse: emotions listed here map to the base portrait (no separate file).
+  // Derived from EMOTION-MAP.md — avoids 404s on faces that share the base "resting face."
+  const EMO_COLLAPSE={
+    eli:    {determined:true,fury:true},                    // base = focused marksman stare
+    tom:    {determined:true,fury:true},                    // base = hard soldier scowl
+    ruth:   {determined:true,fury:true,strained:true,triumph:true}, // stoic wall collapses most
+    cal:    {triumph:true},                                 // base = his manic powder-grin
+    wren:   {triumph:true},                                 // base = cocky grin
+    spotter:{determined:true},                              // base = narrow-eyed under hat brim
+  };
+  // narrators use 'grim' instead of 'grief'; also remap emotions they have no file for
+  const NARRATOR_REMAP={grief:'grim',fury:'alarm',triumph:'determined',strained:null,taint:null};
+  function showPortrait(voId){
+    const spk=voSpeaker(voId); if(!spk) return;
+    let emo=voEmotion(voId);
+    if((spk==='spotter'||spk==='handler')&&emo&&NARRATOR_REMAP[emo]!==undefined) emo=NARRATOR_REMAP[emo];
+    if(emo&&EMO_COLLAPSE[spk]?.[emo]) emo=null; // collapsed → use base portrait directly
+    const base='art/tactics/portraits/portrait-'+spk;
+    const src=emo?base+'-'+emo+'.png':base+'.png';
+    let box=document.getElementById('rwt-phud'); if(!box) return;
+    const img=box.querySelector('img');
+    img.onerror=()=>{ img.onerror=null; img.src=base+'.png'; };
+    img.src=src;
+    box.classList.remove('hidden');
+    if(_timer) clearTimeout(_timer);
+    _timer=setTimeout(()=>{ const b=document.getElementById('rwt-phud'); if(b)b.classList.add('hidden'); _timer=null; }, 3600);
+  }
+  // init DOM element
+  function initHud(){ const b=document.createElement('div'); b.id='rwt-phud'; b.className='hidden'; b.innerHTML='<img src="" alt="" />'; document.body.appendChild(b); }
+  if(document.body) initHud(); else addEventListener('DOMContentLoaded',initHud);
+  // patch Snd.vo to auto-show portrait on every VO play
+  const _origVo=Snd.vo; Snd.vo=(id,vol)=>{ _origVo(id,vol); showPortrait(id); };
+  window.showPortrait=showPortrait; // expose for bark() direct calls if needed
+})();
+
 // ───────── spoken tutorial: first-time, state-driven hints (once ever; speaks via VO when rendered) ─────────
 const TUT_LINES={
  1:"Six of us against whatever crossed the Rim tonight. Pick a trooper — click one, bottom-left.",
@@ -1351,7 +1650,7 @@ function newGame(){
   if(mission.key==='rite') bark('h',`Spotter: Something's chanting out past the rocks [${difficulty}]. Find the Caster and put it down before the rite finishes — ${mission.riteLeft} turns.`,'spotter-rite-deploy');
   else bark('h',`Spotter: Hostiles came through the Rim [${difficulty}]. Advance careful — keep to cover, mind your flanks.`,'spotter-hunt-deploy');
 }
-loadAllSprites().then(()=>{ if(!loadCamp()) camp=freshCamp(); animate(); setScreen('frontier'); });
+loadAllSprites().then(()=>{ if(!loadCamp()) camp=freshCamp(); animate(); setScreen((camp&&camp.introSeen)?'frontier':'intro'); });
 
 // ───────── debug api ─────────
 function protoUnit(clsName){ const def=PLAYER_CLASSES[clsName]||ENEMY_CLASSES[clsName]; return { cls:clsName, aim:def.aim, crit:def.crit, critAtRange:def.critAtRange||0, weapon:def.weapon }; }
@@ -1401,12 +1700,29 @@ window.DBG = {
   window.addEventListener('mouseup',function(){ if(leftDown && panning) justDragged=true; dg=false; leftDown=false; vp.style.cursor=''; });
   // a left-drag pan must NOT also fire a tile click/select — swallow the click that follows a drag
   vp.addEventListener('click',function(e){ if(justDragged){ justDragged=false; e.stopPropagation(); e.preventDefault(); } }, true);
+  // ── touch (iPad): 1 finger = tap-to-select / page-scroll · 2 fingers = pan + pinch-zoom the map ──
+  let tPan=false, tmx=0, tmy=0, tDist=0, t1moved=0, t1x=0, t1y=0;
+  const tMid=t=>({x:(t[0].clientX+t[1].clientX)/2, y:(t[0].clientY+t[1].clientY)/2});
+  const tDis=t=>Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
+  vp.addEventListener('touchstart',function(e){
+    if(e.touches.length===2){ tPan=true; const m=tMid(e.touches); tmx=m.x; tmy=m.y; tDist=tDis(e.touches); e.preventDefault(); }
+    else if(e.touches.length===1){ tPan=false; t1moved=0; t1x=e.touches[0].clientX; t1y=e.touches[0].clientY; }
+  },{passive:false});
+  vp.addEventListener('touchmove',function(e){
+    if(e.touches.length>=2){ e.preventDefault(); if(!tPan){ tPan=true; const m0=tMid(e.touches); tmx=m0.x; tmy=m0.y; tDist=tDis(e.touches); return; }
+      const m=tMid(e.touches); cs.tx+=m.x-tmx; cs.ty+=m.y-tmy; tmx=m.x; tmy=m.y;
+      const d=tDis(e.touches); if(tDist>0){ const r=vr(),ax=m.x-r.left,ay=m.y-r.top,o=cs.s; cs.s=Math.min(cs.MAX,Math.max(cs.MIN,cs.s*(d/tDist))); cs.tx=ax-(ax-cs.tx)*(cs.s/o); cs.ty=ay-(ay-cs.ty)*(cs.s/o); } tDist=d; apply();
+    } else if(e.touches.length===1 && !tPan){ t1moved+=Math.abs(e.touches[0].clientX-t1x)+Math.abs(e.touches[0].clientY-t1y); t1x=e.touches[0].clientX; t1y=e.touches[0].clientY; if(t1moved>12) justDragged=true; /* a 1-finger drag became a page-scroll — don't let it mis-select a tile */ }
+  },{passive:false});
+  vp.addEventListener('touchend',function(e){ if(e.touches.length<2) tPan=false; });
   window.addEventListener('keydown',function(e){ if(typeof uiScreen!=='undefined'&&uiScreen!=='combat')return; const ae=document.activeElement; if(ae&&/INPUT|TEXTAREA/.test(ae.tagName))return; const k=e.key.toLowerCase(),st=48; let h=true; if(k==='w'||k==='arrowup')cs.ty+=st; else if(k==='s'||k==='arrowdown')cs.ty-=st; else if(k==='a'||k==='arrowleft')cs.tx+=st; else if(k==='d'||k==='arrowright')cs.tx-=st; else h=false; if(h){ e.preventDefault(); apply(); } });
   const ctl=document.createElement('div'); ctl.className='camctl';
   ctl.innerHTML='<button title="Zoom in">+</button><button title="Zoom out">−</button><button title="Frame the squad">◉</button>';
   vp.appendChild(ctl);
   ctl.children[0].onclick=function(){ zoomAtCenter(1.2); }; ctl.children[1].onclick=function(){ zoomAtCenter(1/1.2); }; ctl.children[2].onclick=function(){ frameSquad(); };
-  const hint=document.createElement('div'); hint.className='camhint'; hint.textContent='scroll = zoom · drag or WASD = pan'; vp.appendChild(hint);
+  const hint=document.createElement('div'); hint.className='camhint';
+  hint.textContent = ('ontouchstart' in window) ? 'two fingers = pan & zoom · tap = select' : 'scroll = zoom · drag or WASD = pan';
+  vp.appendChild(hint);
   window.RWCamera={ frameSquad:frameSquad, center:center, focus:focus, cs:cs, apply:apply };
   // frame the squad whenever a battle builds; gently follow the selected soldier if it's off-screen
   if(typeof buildBoard==='function'){ const _bb=buildBoard; buildBoard=function(){ const r=_bb.apply(this,arguments); setTimeout(function(){ try{ frameSquad(); }catch(e){} },40); return r; }; }

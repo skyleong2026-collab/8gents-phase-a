@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tactics Proto — XCOM-style skirmish</title>
+<style>
+  :root { --tile: 64px; }
+  * { box-sizing: border-box; }
+  body { background: #0c0c16; color: #cdd3e0; font-family: ui-monospace, monospace; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  h1 { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: #7ecfff; margin: 0; font-weight: 600; }
+  .sub { font-size: 11px; color: #6a7088; margin-top: -8px; }
+  .wrap { display: flex; gap: 20px; align-items: flex-start; }
+  #board { position: relative; width: calc(var(--tile)*12); height: calc(var(--tile)*8); background: #07070f; border: 1px solid #23263e; }
+  .tile { position: absolute; width: var(--tile); height: var(--tile); border: 1px solid #15172a; }
+  .tile.p-zone { background: #0d1626; } .tile.e-zone { background: #160d1f; } .tile.mid { background: #0a0d18; }
+  .tile.reachable { cursor: pointer; box-shadow: inset 0 0 0 2px #5fa8ff66; }
+  .tile.reachable:hover { box-shadow: inset 0 0 0 2px #9fd0ff; background-color: #1a2c48; }
+  .tile.target { cursor: crosshair; box-shadow: inset 0 0 0 2px #ff6a6a99; }
+  .tile.target:hover { box-shadow: inset 0 0 0 2px #ff9a9a; }
+  .tile.gtarget { cursor: crosshair; box-shadow: inset 0 0 0 2px #ffd34a88; }
+  .tile.aoe { background-color: #3a2a0e; }
+  /* cover shields on edges */
+  .cv { position: absolute; font-size: 10px; line-height: 1; z-index: 3; pointer-events: none; text-shadow: 0 0 2px #000; }
+  .cv.half { color: #ffcf6a; } .cv.full { color: #cfe2ff; }
+  .cv.N { top: 1px; left: 50%; transform: translateX(-50%); }
+  .cv.S { bottom: 1px; left: 50%; transform: translateX(-50%); }
+  .cv.E { right: 1px; top: 50%; transform: translateY(-50%); }
+  .cv.W { left: 1px; top: 50%; transform: translateY(-50%); }
+  /* wall segments (full cover edges) */
+  .wall { position: absolute; background: #6b73a0; z-index: 2; pointer-events: none; box-shadow: 0 0 4px #000; }
+  /* occupants */
+  .occ { position: absolute; width: var(--tile); height: var(--tile); transition: left .2s, top .2s; z-index: 5; pointer-events: none; display: flex; align-items: center; justify-content: center; }
+  .occ img { width: 116%; height: 116%; image-rendering: pixelated; object-fit: contain; filter: drop-shadow(0 3px 4px #000b); }
+  .occ.enemy img { transform: scaleX(-1); }
+  .occ.sel::after { content:''; position:absolute; inset: 6px; border-radius: 6px; box-shadow: 0 0 0 2px #7ecfff, 0 0 12px #7ecfff88; }
+  .occ.ow::before { content:'◔'; position:absolute; top:0; left:4px; color:#ffd34a; font-size:13px; z-index:7; text-shadow:0 0 3px #000; }
+  .occ.hunk::before { content:'▲'; position:absolute; top:0; left:4px; color:#9fd0ff; font-size:11px; z-index:7; text-shadow:0 0 3px #000; }
+  .occ.hit { animation: shake .3s; }
+  @keyframes shake { 0%,100%{margin-left:0} 25%{margin-left:-5px} 75%{margin-left:5px} }
+  .hpbar { position: absolute; top: 1px; left: 14%; width: 72%; height: 5px; background: #000b; border: 1px solid #0008; z-index: 6; }
+  .hpbar > i { display:block; height:100%; background: linear-gradient(#6dff9b,#2fae5f); transition: width .2s; }
+  .enemy .hpbar > i { background: linear-gradient(#ff7ad2,#b12f8f); }
+  .pips { position:absolute; bottom:2px; left:50%; transform:translateX(-50%); display:flex; gap:3px; z-index:6; }
+  .pips i { width:6px; height:6px; border-radius:50%; background:#3a3f60; box-shadow:0 0 2px #000; }
+  .pips i.on { background:#9fd0ff; }
+  /* panel */
+  .panel { width: 300px; display:flex; flex-direction:column; gap:10px; }
+  .banner { font-size:15px; letter-spacing:2px; text-transform:uppercase; padding:8px; text-align:center; border-radius:6px; display:none; }
+  .banner.win { display:block; background:#143a24; color:#9bffb0; } .banner.lose { display:block; background:#3a1420; color:#ff8aa8; }
+  .sel-card { background:#11152a; border:1px solid #2a3052; border-radius:6px; padding:9px 11px; font-size:12px; min-height:54px; }
+  .sel-card .nm { color:#fff; font-weight:700; letter-spacing:1px; } .sel-card .cls { color:#7ecfff; }
+  .sel-card .meta { color:#8a90a8; font-size:11px; margin-top:3px; line-height:1.4; }
+  .preview { background:#0a1420; border:1px solid #24405a; border-radius:6px; padding:8px 10px; font-size:12px; min-height:40px; color:#bfe; }
+  .preview .big { font-size:15px; font-weight:700; color:#fff; } .preview .flank { color:#ffd34a; } .preview .cov { color:#9fd0ff; }
+  .acts { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  button.act { background:#161a2e; border:1px solid #2c3252; color:#cdd3e0; padding:8px; border-radius:5px; cursor:pointer; font-family:inherit; font-size:12px; }
+  button.act:hover:not(:disabled) { background:#1e2440; border-color:#4a557e; }
+  button.act:disabled { opacity:.35; cursor:default; }
+  button.act.on { background:#2a3158; border-color:#7ecfff; color:#cfe6ff; }
+  button.act.end { grid-column:1/3; background:#2a2150; border-color:#5a4a9e; color:#d8c8ff; }
+  button.act.restart { grid-column:1/3; }
+  #log { height:170px; overflow-y:auto; background:#07070f; border:1px solid #23263e; border-radius:6px; padding:8px; font-size:11px; line-height:1.5; display:flex; flex-direction:column-reverse; }
+  #log .l{color:#9aa3bd} #log .h{color:#ffcf8a} #log .g{color:#7ecfff} #log .b{color:#ff8aa8} #log .c{color:#ffe14a;font-weight:700}
+  .legend { font-size:10px; color:#5a6080; margin-top:6px; }
+  .turnflag { font-size:11px; color:#8a90a8; } .turnflag b{color:#9bffb0}
+  .diffrow { display:flex; gap:7px; align-items:center; font-size:11px; color:#8a90a8; }
+  .diffrow button { background:#161a2e; border:1px solid #2c3252; color:#cdd3e0; padding:4px 11px; border-radius:5px; cursor:pointer; font-family:inherit; font-size:11px; }
+  .diffrow button.on { background:#2a3158; border-color:#7ecfff; color:#cfe6ff; }
+  .diffrow input { width:60px; background:#0a0d18; border:1px solid #2c3252; color:#cdd3e0; padding:3px 6px; border-radius:4px; font-family:inherit; }
+  /* floating combat text */
+  .floater { position:absolute; z-index:20; font-weight:700; font-size:18px; pointer-events:none; text-shadow:0 0 4px #000,0 0 4px #000; animation: floatup 1s ease-out forwards; }
+  .floater.miss { color:#c2cadb; } .floater.hit { color:#ff8a8a; } .floater.crit { color:#ffe14a; font-size:23px; }
+  @keyframes floatup { 0%{ transform:translate(-50%,4px); opacity:0; } 18%{opacity:1;} 100%{ transform:translate(-50%,-38px); opacity:0; } }
+  /* tracer */
+  .tracer { position:absolute; height:2px; z-index:19; transform-origin:left center; pointer-events:none; animation: tracerfade .32s ease-out forwards; }
+  .tracer.hit { background:linear-gradient(90deg,#7ecfff,#fff); box-shadow:0 0 6px #7ecfff; }
+  .tracer.miss { background:linear-gradient(90deg,#6a7088,#aeb6cc); }
+  @keyframes tracerfade { 0%{opacity:0;} 25%{opacity:1;} 100%{opacity:0;} }
+  /* target visibility (shoot mode) */
+  .occ.targetable::after { content:''; position:absolute; inset:4px; border-radius:50%; box-shadow:0 0 0 2px #ff5a5a, 0 0 10px #ff5a5a99; animation: pulse 1s infinite alternate; }
+  @keyframes pulse { from{opacity:.6} to{opacity:1} }
+  .occ.untargetable img { opacity:.45; filter:grayscale(.85) brightness(.7) !important; }
+  .occ.pendingtgt::after { content:''; position:absolute; inset:2px; border-radius:50%; box-shadow:0 0 0 3px #ff2a2a, 0 0 14px #ff2a2a; }
+  .badge { position:absolute; top:-13px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:700; padding:1px 5px; border-radius:3px; z-index:8; white-space:nowrap; }
+  .badge.can { background:#3a1416; color:#ff9a9a; box-shadow:0 0 4px #000; }
+  .badge.cant { background:#1a1d2e; color:#7a82a0; }
+  .tile.pmove { box-shadow: inset 0 0 0 3px #9bffb0 !important; background-color:#143a24 !important; }
+  /* confirm bar */
+  .confirm { background:#101a2e; border:1px solid #3a4e7a; border-radius:6px; padding:9px 11px; display:flex; flex-direction:column; gap:7px; }
+  .confirm .q { font-size:12px; color:#cfe6ff; line-height:1.4; } .confirm .q b{color:#fff;}
+  .confirm .row { display:flex; gap:6px; }
+  .confirm button { flex:1; padding:9px; border-radius:5px; font-family:inherit; font-size:12px; cursor:pointer; font-weight:700; }
+  .confirm .go { background:#1f5a3a; border:1px solid #3fae6f; color:#cfffe0; }
+  .confirm .go:hover { background:#27734a; }
+  .confirm .no { background:#3a1a22; border:1px solid #8a4a5a; color:#ffd0d8; }
+  .confirm .no:hover { background:#4a232e; }
+</style>
+</head>
+<body>
+<h1>Tactics Proto — %-to-hit · cover · distance · classes</h1>
+<div class="sub">12×8 · XCOM-style · 2 actions/unit · select a soldier → Move / Shoot / Overwatch / Hunker / Grenade</div>
+<div class="diffrow" id="diffrow"></div>
+
+<div class="wrap">
+  <div>
+    <div id="board"></div>
+    <div class="legend">Shields: <span style="color:#ffcf6a">▢ half (−20)</span> · <span style="color:#cfe2ff">▣ full (−40, blocks sight)</span> · flank = get around cover → no defense + crit</div>
+  </div>
+  <div class="panel">
+    <div id="banner" class="banner"></div>
+    <div class="turnflag" id="turnflag"></div>
+    <div class="sel-card" id="selcard">No unit selected.</div>
+    <div class="preview" id="preview">Hover a target to see the odds.</div>
+    <div class="confirm" id="confirm" style="display:none"></div>
+    <div class="acts" id="acts"></div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+// ───────── tuning ─────────
+const TUNING = {
+  COVER: {0:0, 1:20, 2:40},
+  COVER_HUNKER: {0:0, 1:40, 2:60},
+  SNAPSHOT_PENALTY: 15,   // sniper, if it moved
+  OVERWATCH_PENALTY: 15,
+  CRIT_MULT: 1.5,
+  FLANK_CRIT: 25,
+  HIT_FLOOR: 5, HIT_CEIL: 95,
+  BONUS_PER: 4, BONUS_CAP: 20, BONUS_CLOSE: 8,   // long-gun: reward range, PUNISH being close
+  AI: { coverW: 25, flankBonus: 20, stepCost: 2, selfFlankPenalty: 15, shootThresh: 45, openThresh: 50 },
+};
+// difficulty presets — scale enemy aim + AI aggression (lower thresholds = shoots/repositions more readily)
+const DIFFICULTY = {
+  Recruit:   { aimMod:-12, ai:{ shootThresh:55, openThresh:62, flankBonus:8,  coverW:30, stepCost:3, selfFlankPenalty:20 } },
+  Veteran:   { aimMod:0,   ai:{ shootThresh:45, openThresh:50, flankBonus:20, coverW:25, stepCost:2, selfFlankPenalty:15 } },
+  Commander: { aimMod:8,   ai:{ shootThresh:35, openThresh:42, flankBonus:35, coverW:18, stepCost:1, selfFlankPenalty:8 } },
+};
+let difficulty='Veteran';
+function applyDifficulty(){ Object.assign(TUNING.AI, DIFFICULTY[difficulty].ai); }
+function setDifficulty(name){ difficulty=name; newGame(); }
+const COLS = 12, ROWS = 8, T = 64;
+
+// ───────── rng (Mulberry32, from src/engine/rng.js) ─────────
+function createRng(seed){ let s=(seed>>>0)||1; return function(){ s+=0x6d2b79f5; let t=s; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
+let SEED = 1337, rng = createRng(SEED);
+
+// ───────── helpers ─────────
+const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const cheb=(a,b)=>Math.max(Math.abs(a.c-b.c),Math.abs(a.r-b.r));
+const manh=(a,b)=>Math.abs(a.c-b.c)+Math.abs(a.r-b.r);
+const inB=(c,r)=>c>=0&&c<COLS&&r>=0&&r<ROWS;
+const sign=x=>x<0?-1:x>0?1:0;
+
+// ───────── grid + cover ─────────
+let grid;
+function blankGrid(){
+  grid=[];
+  for(let r=0;r<ROWS;r++){ grid[r]=[]; for(let c=0;c<COLS;c++) grid[r][c]={c,r,cover:{N:0,E:0,S:0,W:0},destructible:{N:false,E:false,S:false,W:false}}; }
+}
+function setCover(c,r,side,level,destructible){ const t=grid[r][c]; t.cover[side]=level; t.destructible[side]=!!destructible; }
+function layout(){
+  blankGrid();
+  // full walls (indestructible, block sight)
+  setCover(5,2,'E',2,false); setCover(5,2,'S',2,false);
+  setCover(6,5,'N',2,false); setCover(6,5,'W',2,false);
+  // full destructible crates (block sight, clearable)
+  setCover(4,4,'E',2,true);
+  setCover(8,3,'W',2,true);
+  // half cover (destructible, do not block sight)
+  setCover(3,5,'N',1,true);
+  setCover(4,6,'N',1,true); setCover(4,6,'E',1,true);
+  setCover(7,2,'S',1,true); setCover(7,2,'W',1,true);
+  setCover(8,4,'S',1,true);
+  setCover(6,3,'N',1,true); setCover(6,3,'S',1,true);
+  setCover(9,5,'W',1,true);
+  setCover(2,6,'E',1,true);
+  rebuildWalls();
+}
+// wall set = full-cover edges (block LOS + movement)
+let wallSet;
+function edgeKey(c1,r1,c2,r2){ return (c1<c2||(c1===c2&&r1<=r2)) ? `${c1},${r1}|${c2},${r2}` : `${c2},${r2}|${c1},${r1}`; }
+function rebuildWalls(){
+  wallSet=new Set();
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){ const t=grid[r][c];
+    if(t.cover.N===2) wallSet.add(edgeKey(c,r,c,r-1));
+    if(t.cover.S===2) wallSet.add(edgeKey(c,r,c,r+1));
+    if(t.cover.E===2) wallSet.add(edgeKey(c,r,c+1,r));
+    if(t.cover.W===2) wallSet.add(edgeKey(c,r,c-1,r));
+  }
+}
+function wallBetween(ax,ay,bx,by){
+  const dx=bx-ax, dy=by-ay;
+  if(Math.abs(dx)+Math.abs(dy)===1) return wallSet.has(edgeKey(ax,ay,bx,by));
+  // diagonal: blocked only if BOTH corner orthogonal edges are walls
+  const e1=wallSet.has(edgeKey(ax,ay,ax+dx,ay)), e2=wallSet.has(edgeKey(ax,ay,ax,ay+dy));
+  return e1&&e2;
+}
+
+// ───────── LOS ─────────
+function lineCells(a,b){
+  let x0=a.c,y0=a.r,x1=b.c,y1=b.r;
+  let dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+  let x=x0,y=y0, n=1+dx+dy;
+  const xi=x1>x0?1:-1, yi=y1>y0?1:-1;
+  let err=dx-dy; dx*=2; dy*=2;
+  const cells=[];
+  for(; n>0; n--){ cells.push({c:x,r:y});
+    if(err>0){ x+=xi; err-=dy; }
+    else if(err<0){ y+=yi; err+=dx; }
+    else { x+=xi; y+=yi; err-=dy; err+=dx; n--; }
+  }
+  return cells;
+}
+function hasLOS(a,b){
+  const cells=lineCells(a,b);
+  for(let i=1;i<cells.length;i++){
+    const P=cells[i-1], Q=cells[i];
+    const touchesEnd = (P.c===a.c&&P.r===a.r)||(Q.c===b.c&&Q.r===b.r)||(P.c===b.c&&P.r===b.r)||(Q.c===a.c&&Q.r===a.r);
+    if(touchesEnd) continue; // own/target cover doesn't block the shot between them
+    if(wallBetween(P.c,P.r,Q.c,Q.r)) return false;
+  }
+  return true;
+}
+
+// ───────── cover / flank ─────────
+function coverAt(c,r){ return grid[r][c].cover; }
+function activeCoverFor(target, shooter){
+  const cv=coverAt(target.c,target.r);
+  const dc=sign(shooter.c-target.c), dr=sign(shooter.r-target.r); let best=0;
+  if(dr<0) best=Math.max(best,cv.N);
+  if(dr>0) best=Math.max(best,cv.S);
+  if(dc>0) best=Math.max(best,cv.E);
+  if(dc<0) best=Math.max(best,cv.W);
+  return best;
+}
+function hasAnyCover(u){ const cv=coverAt(u.c,u.r); return cv.N||cv.E||cv.S||cv.W; }
+function isFlanked(shooter,target){ return activeCoverFor(target,shooter)===0; }
+
+// ───────── classes ─────────
+const PLAYER_CLASSES = {
+  Sniper:   { hp:8,  aim:75, mobility:3, crit:10, critAtRange:3, grenades:0, tint:'hue-rotate(185deg) saturate(1.4)', weapon:{name:'Scoped Rifle', dmgMin:5,dmgMax:7, optimalRange:6, maxRange:0, falloff:0, falloffSign:'bonus'} },
+  Assault:  { hp:10, aim:70, mobility:5, crit:15, critAtRange:0, grenades:0, tint:'hue-rotate(-28deg) saturate(1.6) brightness(1.05)', weapon:{name:'Shotgun', dmgMin:4,dmgMax:8, optimalRange:2, maxRange:8, falloff:12, falloffSign:'penalty'} },
+  Grenadier:{ hp:9,  aim:65, mobility:4, crit:10, critAtRange:0, grenades:2, tint:'hue-rotate(95deg) saturate(1.3)', weapon:{name:'Rifle', dmgMin:3,dmgMax:6, optimalRange:5, maxRange:10, falloff:6, falloffSign:'penalty'} },
+};
+const ENEMY_CLASSES = {
+  Bruiser: { sprite:'cinderpaw', hp:12, aim:60, mobility:4, crit:12, critAtRange:0, weapon:{name:'Claw', dmgMin:4,dmgMax:7, optimalRange:2, maxRange:7, falloff:12, falloffSign:'penalty'} },
+  Spitter: { sprite:'hexmoth', hp:8, aim:68, mobility:4, crit:8, critAtRange:0, acidLob:1, weapon:{name:'Acid Rifle', dmgMin:3,dmgMax:6, optimalRange:5, maxRange:10, falloff:6, falloffSign:'penalty'} },
+  Stalker: { sprite:'frostwarden', hp:6, aim:80, mobility:3, crit:14, critAtRange:3, weapon:{name:'Cryo-lance', dmgMin:5,dmgMax:8, optimalRange:6, maxRange:0, falloff:0, falloffSign:'bonus'} },
+};
+
+// ───────── units ─────────
+let units, selected=null, mode='idle', pending=null;
+function makeUnit(side, clsName, c, r){
+  const def = side==='player'? PLAYER_CLASSES[clsName] : ENEMY_CLASSES[clsName];
+  const aimMod = side==='enemy'? (DIFFICULTY[difficulty].aimMod||0) : 0;
+  return { id:side[0]+'-'+clsName, side, cls:clsName, c, r, hp:def.hp, maxHp:def.hp, aim:def.aim+aimMod, mobility:def.mobility,
+    crit:def.crit, critAtRange:def.critAtRange||0, weapon:def.weapon, grenades:def.grenades||0, acidLob:def.acidLob||0,
+    spriteKind: side==='player'?'agent':def.sprite, tint:def.tint||'', actions:2, movedThisTurn:false, shotThisTurn:false,
+    overwatch:false, hunkered:false, alive:true, state:'idle', stateTimer:0 };
+}
+function initUnits(){
+  units = [
+    makeUnit('player','Sniper',0,7),
+    makeUnit('player','Assault',1,7),
+    makeUnit('player','Grenadier',1,6),
+    makeUnit('enemy','Stalker',11,0),
+    makeUnit('enemy','Bruiser',10,0),
+    makeUnit('enemy','Spitter',11,1),
+  ];
+}
+function unitAt(c,r){ return units.find(u=>u.alive&&u.c===c&&u.r===r); }
+function living(side){ return units.filter(u=>u.alive&&u.side===side); }
+
+// ───────── combat math ─────────
+function hitMath(shooter, dist, coverLevel, hunkered, moved, overwatch){
+  let base=shooter.aim;
+  const over=Math.max(0, dist-shooter.weapon.optimalRange);
+  let distTerm=0;
+  if(shooter.weapon.falloffSign==='penalty') distTerm=-over*shooter.weapon.falloff;
+  else if(shooter.weapon.falloffSign==='bonus'){ const under=Math.max(0, shooter.weapon.optimalRange-dist); distTerm=Math.min(TUNING.BONUS_CAP, over*TUNING.BONUS_PER) - under*TUNING.BONUS_CLOSE; }
+  const coverTerm = -(hunkered? (TUNING.COVER_HUNKER[coverLevel]||0) : (TUNING.COVER[coverLevel]||0));
+  let pen=0;
+  if(moved && shooter.cls==='Sniper') pen-=TUNING.SNAPSHOT_PENALTY;
+  if(overwatch) pen-=TUNING.OVERWATCH_PENALTY;
+  return clamp(Math.round(base+distTerm+coverTerm+pen), TUNING.HIT_FLOOR, TUNING.HIT_CEIL);
+}
+function critMath(shooter, dist, flanked, hunkered){
+  if(hunkered) return 0;
+  let c=shooter.crit + (shooter.critAtRange||0)*Math.max(0, dist-shooter.weapon.optimalRange);
+  if(flanked) c+=TUNING.FLANK_CRIT;
+  return clamp(Math.round(c),0,100);
+}
+function hitChance(shooter,target,opts={}){
+  const dist=cheb(shooter,target);
+  const cl=activeCoverFor(target,shooter);
+  return hitMath(shooter,dist,cl,target.hunkered, opts.moved??shooter.movedThisTurn, opts.overwatch||false);
+}
+function critChance(shooter,target){
+  return critMath(shooter,cheb(shooter,target),isFlanked(shooter,target),target.hunkered);
+}
+function rollDamage(shooter,isCrit){ const base=shooter.weapon.dmgMin+Math.floor(rng()*(shooter.weapon.dmgMax-shooter.weapon.dmgMin+1)); return isCrit? Math.round(base*TUNING.CRIT_MULT):base; }
+function inRange(shooter,target){ const d=cheb(shooter,target); return shooter.weapon.maxRange===0 || d<=shooter.weapon.maxRange; }
+function canTarget(shooter,target){ return target.alive && target.side!==shooter.side && inRange(shooter,target) && hasLOS(shooter,target); }
+
+function resolveShot(shooter,target,opts={}){
+  flashAttack(shooter);
+  const hit=hitChance(shooter,target,opts);
+  const moved = opts.moved??shooter.movedThisTurn;
+  const tag = opts.overwatch? ' (overwatch)':'';
+  if(rng()*100 >= hit){
+    tracer(shooter,target,'miss'); floatText(target,'MISS','miss');
+    log('l', `${nm(shooter)} fires at ${nm(target)} — MISS${tag} (${hit}%).`);
+    if(shooter.side==='player' && rng()<0.5) bark('h','Handler: Damn. Reset and try the angle.');
+    return {hit:false};
+  }
+  const crit = critChance(shooter,target);
+  const isCrit = rng()*100 < crit;
+  const dmg = rollDamage(shooter,isCrit);
+  target.hp-=dmg; flashHit(target);
+  tracer(shooter,target,'hit'); floatText(target, '-'+dmg, isCrit?'crit':'hit');
+  if(isCrit) log('c', `${nm(shooter)} CRITS ${nm(target)} for ${dmg}!${isFlanked(shooter,target)?' (flanked)':''}`);
+  else log(shooter.side==='player'?'g':'b', `${nm(shooter)} hits ${nm(target)} for ${dmg}.${tag}`);
+  if(target.hp<=0){ target.alive=false; target.hp=0; log(target.side==='player'?'b':'g', `${nm(target)} is down.`); if(target.side==='enemy'&&shooter.side==='player') bark('h','Handler: Target down. Keep moving.'); }
+  return {hit:true,isCrit,dmg};
+}
+
+function doGrenade(shooter, tc, tr){
+  flashAttack(shooter);
+  log('g', `${nm(shooter)} lobs a grenade at (${tc},${tr}).`); bark('h','Handler: Frag out — cover\'s coming down.');
+  for(let r=tr-1;r<=tr+1;r++)for(let c=tc-1;c<=tc+1;c++){ if(!inB(c,r)) continue;
+    const u=unitAt(c,r); if(u){ const dmg=4+Math.floor(rng()*4); u.hp-=dmg; flashHit(u); log(u.side==='player'?'b':'g', `  ${nm(u)} caught in the blast (-${dmg}).`); if(u.hp<=0){u.alive=false;u.hp=0; log(u.side==='player'?'b':'g',`  ${nm(u)} is down.`);} }
+    destroyCoverAt(c,r);
+  }
+  rebuildWalls();
+  shooter.grenades--;
+}
+function doAcidLob(shooter, tc, tr){
+  flashAttack(shooter);
+  log('b', `${nm(shooter)} spits acid at (${tc},${tr}) — stripping cover.`);
+  for(let r=tr-1;r<=tr+1;r++)for(let c=tc-1;c<=tc+1;c++){ if(!inB(c,r)) continue;
+    const u=unitAt(c,r); if(u){ const dmg=2+Math.floor(rng()*3); u.hp-=dmg; flashHit(u); log(u.side==='player'?'b':'g',`  ${nm(u)} hit by acid (-${dmg}).`); if(u.hp<=0){u.alive=false;u.hp=0;log('b',`  ${nm(u)} is down.`);} }
+    destroyHalfCoverAt(c,r);
+  }
+  rebuildWalls();
+  shooter.acidLob--;
+}
+function destroyCoverAt(c,r){ const t=grid[r][c]; for(const s of ['N','E','S','W']) if(t.destructible[s]&&t.cover[s]>0){ t.cover[s]=0; t.destructible[s]=false; } }
+function destroyHalfCoverAt(c,r){ const t=grid[r][c]; for(const s of ['N','E','S','W']) if(t.destructible[s]&&t.cover[s]===1){ t.cover[s]=0; t.destructible[s]=false; } }
+
+// ───────── movement ─────────
+function reachable(u){
+  const out={}; out[u.c+','+u.r]=0; const q=[[u.c,u.r,0]];
+  while(q.length){ const [c,r,d]=q.shift(); if(d>=u.mobility) continue;
+    for(let dc=-1;dc<=1;dc++)for(let dr=-1;dr<=1;dr++){ if(!dc&&!dr) continue;
+      const nc=c+dc, nr=r+dr; if(!inB(nc,nr)) continue;
+      if(wallBetween(c,r,nc,nr)) continue;
+      if(unitAt(nc,nr)) continue;
+      const k=nc+','+nr; if(out[k]!==undefined && out[k]<=d+1) continue;
+      out[k]=d+1; q.push([nc,nr,d+1]);
+    }
+  }
+  delete out[u.c+','+u.r];
+  return out;
+}
+
+// ───────── sprites ─────────
+const SPRITE_DIRS = {
+  agent:{ idle:'art/agent/idle-smooth', attack:'art/agent/attack-smooth' },
+  cinderpaw:{ idle:'art/creatures/cinderpaw/idle_v3', attack:'art/creatures/cinderpaw/attack_v3' },
+  frostwarden:{ idle:'art/creatures/frostwarden/idle_256', attack:'art/creatures/frostwarden/attack_v3' },
+  hexmoth:{ idle:'art/creatures/hexmoth/idle_256', attack:'art/creatures/hexmoth/attack_v3' },
+};
+const frames={}; // frames[kind][state] = [Image,...]
+function loadFrames(dir){ return new Promise(res=>{ const arr=[]; const next=i=>{ const im=new Image(); im.src=dir+'/frame_'+String(i).padStart(2,'0')+'.png'; im.onload=()=>{arr.push(im);next(i+1);}; im.onerror=()=>res(arr); }; next(0); }); }
+async function loadAllSprites(){
+  for(const kind of Object.keys(SPRITE_DIRS)){ frames[kind]={};
+    frames[kind].idle = await loadFrames(SPRITE_DIRS[kind].idle);
+    frames[kind].attack = await loadFrames(SPRITE_DIRS[kind].attack);
+  }
+}
+
+// ───────── render ─────────
+const board=document.getElementById('board');
+let tileEls=[], occEls={};
+function buildBoard(){
+  board.innerHTML=''; tileEls=[]; occEls={};
+  for(let r=0;r<ROWS;r++){ tileEls[r]=[]; for(let c=0;c<COLS;c++){
+    const d=document.createElement('div'); d.className='tile';
+    d.style.left=(c*T)+'px'; d.style.top=(r*T)+'px';
+    d.dataset.c=c; d.dataset.r=r;
+    d.addEventListener('click',()=>onTileClick(c,r));
+    d.addEventListener('mouseenter',()=>onTileHover(c,r));
+    board.appendChild(d); tileEls[r][c]=d;
+  }}
+  for(const u of units){
+    const o=document.createElement('div'); o.className='occ '+u.side; o.id='occ-'+u.id;
+    const img=document.createElement('img'); img.style.filter=u.tint;
+    o.innerHTML='<div class="hpbar"><i></i></div><div class="pips"><i></i><i></i></div><div class="badge" style="display:none"></div>';
+    o.appendChild(img);
+    board.appendChild(o); occEls[u.id]={o,img};
+  }
+}
+function render(){
+  const reach = (selected && mode==='move') ? reachable(selected) : {};
+  const targets = (selected && (mode==='shoot')) ? validTargets(selected) : [];
+  const tset = new Set(targets.map(t=>t.c+','+t.r));
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    const t=grid[r][c], el=tileEls[r][c];
+    let zone = c<=2?'p-zone': c>=9?'e-zone':'mid';
+    let cls='tile '+zone;
+    if(reach[c+','+r]!==undefined) cls+=' reachable';
+    if(tset.has(c+','+r)) cls+=' target';
+    if(pending&&pending.type==='move'&&pending.c===c&&pending.r===r) cls+=' pmove';
+    if(pending&&pending.type==='grenade'&&Math.max(Math.abs(pending.c-c),Math.abs(pending.r-r))<=1) cls+=' aoe';
+    el.className=cls;
+    // cover shields + walls
+    let inner='';
+    for(const s of ['N','E','S','W']){ const lv=t.cover[s]; if(lv){ inner+=`<span class="cv ${s} ${lv===2?'full':'half'}">${lv===2?'▣':'▢'}</span>`; } }
+    el.innerHTML=inner;
+  }
+  // walls overlay (full edges) — draw thick segments
+  drawWalls();
+  // occupants
+  const shootMode = selected && mode==='shoot';
+  for(const u of units){ const e=occEls[u.id]; if(!e) continue;
+    if(!u.alive){ e.o.style.display='none'; continue; } e.o.style.display='flex';
+    e.o.style.left=(u.c*T)+'px'; e.o.style.top=(u.r*T)+'px';
+    let cls='occ '+u.side+(u===selected?' sel':'')+(u.overwatch?' ow':'')+(u.hunkered?' hunk':'');
+    const badge=e.o.querySelector('.badge'); badge.style.display='none';
+    if(shootMode && u.side==='enemy'){
+      if(canTarget(selected,u)){ cls+=' targetable'; if(pending&&pending.type==='shoot'&&pending.target===u) cls+=' pendingtgt';
+        badge.className='badge can'; badge.textContent=hitChance(selected,u)+'%'; badge.style.display='block'; }
+      else { cls+=' untargetable'; badge.className='badge cant'; badge.textContent=!inRange(selected,u)?'out of range':'no sight'; badge.style.display='block'; }
+    }
+    e.o.className=cls;
+    e.o.querySelector('.hpbar > i').style.width=(100*u.hp/u.maxHp)+'%';
+    const pips=e.o.querySelectorAll('.pips i'); pips.forEach((p,i)=>p.className=i<u.actions?'on':'');
+  }
+  renderPanel();
+}
+let wallEls=[];
+function drawWalls(){
+  wallEls.forEach(w=>w.remove()); wallEls=[];
+  const seen=new Set();
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){ const t=grid[r][c];
+    const add=(side)=>{ const key=c+','+r+side; if(seen.has(key))return; seen.add(key);
+      const w=document.createElement('div'); w.className='wall';
+      if(side==='N'){ w.style.left=(c*T)+'px'; w.style.top=(r*T-1)+'px'; w.style.width=T+'px'; w.style.height='3px'; }
+      if(side==='S'){ w.style.left=(c*T)+'px'; w.style.top=(r*T+T-2)+'px'; w.style.width=T+'px'; w.style.height='3px'; }
+      if(side==='E'){ w.style.left=(c*T+T-2)+'px'; w.style.top=(r*T)+'px'; w.style.width='3px'; w.style.height=T+'px'; }
+      if(side==='W'){ w.style.left=(c*T-1)+'px'; w.style.top=(r*T)+'px'; w.style.width='3px'; w.style.height=T+'px'; }
+      board.appendChild(w); wallEls.push(w);
+    };
+    if(t.cover.N===2)add('N'); if(t.cover.S===2)add('S'); if(t.cover.E===2)add('E'); if(t.cover.W===2)add('W');
+  }
+}
+function validTargets(u){ return units.filter(t=>canTarget(u,t)); }
+
+function renderPanel(){
+  document.getElementById('turnflag').innerHTML = phase==='player'?'Your turn — <b>act</b>':phase==='enemy'?'Enemy turn…':'';
+  const sc=document.getElementById('selcard');
+  if(selected){ const u=selected;
+    sc.innerHTML=`<span class="nm">${u.cls}</span> · HP ${u.hp}/${u.maxHp} · aim ${u.aim}<div class="meta">`+
+      `weapon ${u.weapon.name} (${u.weapon.dmgMin}-${u.weapon.dmgMax}, best @${u.weapon.optimalRange}${u.weapon.maxRange?', max '+u.weapon.maxRange:''}) · mob ${u.mobility} · crit ${u.crit}%`+
+      `${u.grenades?` · grenades ${u.grenades}`:''} · actions ${u.actions} ${u.hunkered?'· HUNKERED':''}${u.overwatch?'· OVERWATCH':''}</div>`;
+  } else sc.textContent='No unit selected. Click a soldier (bottom-left).';
+  renderActs();
+  renderConfirm();
+}
+function renderConfirm(){
+  const el=document.getElementById('confirm');
+  if(!pending||!selected){ el.style.display='none'; return; }
+  el.style.display='flex';
+  let q='', label='', danger=false;
+  if(pending.type==='move'){ q=`Move <b>${selected.cls}</b> to (${pending.c},${pending.r})?`; label='✓ Move'; }
+  else if(pending.type==='shoot'){ const t=pending.target; q=`Fire at <b>${t.cls}</b> — <b>${hitChance(selected,t)}%</b> hit · crit ${critChance(selected,t)}% · dmg ${selected.weapon.dmgMin}–${selected.weapon.dmgMax}${isFlanked(selected,t)?' · <span style="color:#ffd34a">FLANKED</span>':''}`; label='🔫 Fire'; }
+  else if(pending.type==='grenade'){ q=`Throw grenade at (${pending.c},${pending.r})? radius 1 · 4–7 dmg · destroys cover · <b>${selected.grenades-1}</b> left`; label='💥 Throw'; }
+  else if(pending.type==='overwatch'){ q=`Set <b>${selected.cls}</b> on Overwatch — fires at the first enemy that moves in sight. (ends turn)`; label='◔ Overwatch'; }
+  else if(pending.type==='hunker'){ q=`<b>${selected.cls}</b> Hunker Down — cover doubled, can't be crit. (ends turn)`; label='▲ Hunker'; }
+  el.innerHTML=`<div class="q">${q}</div><div class="row"><button class="go">${label}</button><button class="no">Cancel</button></div>`;
+  el.querySelector('.go').onclick=confirmPending;
+  el.querySelector('.no').onclick=cancelPending;
+}
+function renderActs(){
+  const box=document.getElementById('acts'); box.innerHTML='';
+  const mk=(label,on,dis,fn,extra='')=>{ const b=document.createElement('button'); b.className='act'+(on?' on':'')+extra; b.textContent=label; b.disabled=dis; if(!dis)b.onclick=fn; box.appendChild(b); return b; };
+  const u=selected, mine = u&&u.side==='player'&&phase==='player';
+  mk('Move', mode==='move', !mine||u.actions<1, ()=>setMode('move'));
+  mk('Shoot', mode==='shoot', !mine||!canShoot(u), ()=>setMode('shoot'));
+  mk('Overwatch', pending&&pending.type==='overwatch', !mine||u.actions<1||u.shotThisTurn, ()=>{ pending={type:'overwatch'}; mode='idle'; render(); });
+  mk('Hunker', pending&&pending.type==='hunker', !mine||u.actions<1, ()=>{ pending={type:'hunker'}; mode='idle'; render(); });
+  mk('Grenade'+(u&&u.grenades?` (${u.grenades})`:''), mode==='grenade', !mine||!u||u.grenades<1||u.actions<1, ()=>setMode('grenade'));
+  mk('End Turn ▸', false, phase!=='player', ()=>endPlayerTurn(), ' end');
+  mk('Restart', false, false, ()=>newGame(), ' restart');
+}
+
+// ───────── input ─────────
+function canShoot(u){ return u && !u.shotThisTurn && (u.actions>=1 || u.cls==='Assault'); }
+function selectUnit(u){ selected=u; mode='idle'; pending=null; render(); }
+function setMode(m){ pending=null; mode = (mode===m)?'idle':m; setPreview(''); render(); }
+function onTileClick(c,r){
+  if(phase!=='player') return;
+  const u=unitAt(c,r);
+  // clicking one of your soldiers always (re)selects it and clears any pending choice
+  if(u&&u.side==='player'){ selectUnit(u); return; }
+  if(!selected) return;
+  // clicking a valid target/destination ARMS a pending action — it does not commit until you Confirm
+  if(mode==='move'){ if(reachable(selected)[c+','+r]!==undefined){ pending={type:'move',c,r}; render(); } return; }
+  if(mode==='shoot'){ const tgt=unitAt(c,r); if(tgt&&canTarget(selected,tgt)){ pending={type:'shoot',target:tgt}; showShotPreview(selected,tgt); render(); } return; }
+  if(mode==='grenade'){ if(cheb(selected,{c,r})<=6 && hasLOS(selected,{c,r})){ pending={type:'grenade',c,r}; render(); } return; }
+}
+function confirmPending(){ if(!pending||phase!=='player'||!selected) return; const p=pending; pending=null;
+  if(p.type==='move') moveUnit(selected,p.c,p.r);
+  else if(p.type==='shoot') playerShoot(selected,p.target);
+  else if(p.type==='grenade') playerGrenade(selected,p.c,p.r);
+  else if(p.type==='overwatch') act_overwatch(selected);
+  else if(p.type==='hunker') act_hunker(selected);
+}
+function cancelPending(){ pending=null; setPreview(''); render(); }
+function onTileHover(c,r){
+  if(!selected) return;
+  if(mode==='shoot'){ const t=unitAt(c,r); if(t&&canTarget(selected,t)) showShotPreview(selected,t); }
+  else if(mode==='grenade'){ if(cheb(selected,{c,r})<=6) setPreview(`<span class="big">Grenade</span> → (${c},${r})<br>radius 1 · 4–7 dmg · destroys cover`); }
+}
+function showShotPreview(s,t){
+  const hit=hitChance(s,t), crit=critChance(s,t), fl=isFlanked(s,t), cl=activeCoverFor(t,s);
+  const tag = fl? '<span class="flank">FLANKED</span>' : cl===2?'<span class="cov">full cover</span>':cl===1?'<span class="cov">half cover</span>':'open';
+  setPreview(`<span class="big">${hit}%</span> to hit · crit ${crit}% · dmg ${s.weapon.dmgMin}–${s.weapon.dmgMax} · ${tag}<br><span style="color:#8a90a8">vs ${t.cls} · range ${cheb(s,t)}</span>`);
+}
+function setPreview(html){ document.getElementById('preview').innerHTML = html||'Hover a target to see the odds.'; }
+
+function moveUnit(u,c,r){
+  const from={c:u.c,r:u.r};
+  u.c=c; u.r=r; u.movedThisTurn=true; u.actions--;
+  triggerOverwatch(u, from, {c,r});
+  if(u.actions<1 || !canShoot(u)) { /* stays selected */ }
+  mode='idle'; setPreview(''); render(); checkEnd();
+}
+function playerShoot(u,t){ resolveShot(u,t); u.shotThisTurn=true; u.actions=0; mode='idle'; setPreview(''); render(); checkEnd(); }
+function playerGrenade(u,c,r){ doGrenade(u,c,r); u.shotThisTurn=true; u.actions=0; mode='idle'; setPreview(''); render(); checkEnd(); }
+function act_overwatch(u){ u.overwatch=true; u.actions=0; u.shotThisTurn=true; log('l',`${nm(u)} sets Overwatch.`); mode='idle'; render(); }
+function act_hunker(u){ u.hunkered=true; u.actions=0; log('l',`${nm(u)} hunkers down.`); mode='idle'; render(); }
+
+// ───────── overwatch ─────────
+function triggerOverwatch(mover, from, to){
+  const path=lineCells(from,to);
+  for(const cell of path){
+    for(const w of units){ if(!w.alive||w.side===mover.side||!w.overwatch) continue;
+      const probe={c:cell.c,r:cell.r};
+      if(inRange(w,probe) && hasLOS(w,probe)){
+        w.overwatch=false;
+        const saved={c:mover.c,r:mover.r}; mover.c=cell.c; mover.r=cell.r; // resolve at the crossing cell
+        resolveShot(w,mover,{overwatch:true,moved:false});
+        if(!mover.alive){ render(); return; }
+        mover.c=saved.c; mover.r=saved.r;
+      }
+    }
+  }
+}
+
+// ───────── turn flow ─────────
+let phase='player';
+function resetForTurn(side){ for(const u of living(side)){ u.actions=2; u.movedThisTurn=false; u.shotThisTurn=false; u.overwatch=false; u.hunkered=false; } }
+function endPlayerTurn(){ if(phase!=='player') return; phase='enemy'; selected=null; mode='idle'; pending=null; render(); setTimeout(enemyTurn, 400); }
+function enemyTurn(){
+  resetForTurn('enemy');
+  const acting=living('enemy').slice();
+  let i=0;
+  const step=()=>{ if(i>=acting.length){ phase='player'; resetForTurn('player'); render(); checkEnd(); return; }
+    const e=acting[i++]; if(!e.alive){ step(); return; }
+    aiAct(e); render();
+    if(checkEnd()) return;
+    setTimeout(step, 650);
+  };
+  setTimeout(step, 300);
+}
+
+// ───────── enemy AI ─────────
+function bestShotFrom(e, c, r){ // returns {target,hit,flank} best at position (c,r)
+  const probe={c,r,cls:e.cls,weapon:e.weapon,aim:e.aim,crit:e.crit,critAtRange:e.critAtRange,side:e.side};
+  let best=null;
+  for(const t of living('player')){ if(!inRange(probe,t)||!hasLOS(probe,t)) continue;
+    const hit=hitChance(probe,t,{moved:(c!==e.c||r!==e.r)}); const flank=isFlanked(probe,t); const lethal=(()=>{ // rough lethal check at avg dmg
+      const avg=Math.round((e.weapon.dmgMin+e.weapon.dmgMax)/2); return avg>=t.hp; })();
+    const score=hit+(flank?30:0)+(lethal&&hit>=50?100:0);
+    if(!best||score>best.score) best={target:t,hit,flank,lethal,score};
+  }
+  return best;
+}
+function aiAct(e){
+  // 1. shoot from here if good
+  let here=bestShotFrom(e,e.c,e.r);
+  if(here && (here.lethal&&here.hit>=50 || here.flank || here.hit>=TUNING.AI.openThresh)){
+    e.movedThisTurn=false; resolveShot(e,here.target); e.shotThisTurn=true; e.actions=0; return;
+  }
+  // spitter acid-lob on clustered/half-covered players
+  if(e.cls==='Spitter' && e.acidLob>0){
+    for(const t of living('player')){ if(inRange(e,t)&&hasLOS(e,t)&&activeCoverFor(t,e)===1){ doAcidLob(e,t.c,t.r); e.actions=0; e.shotThisTurn=true; return; } }
+  }
+  // 2. reposition: score reachable tiles
+  const reach=reachable(e); let bestTile=null;
+  for(const k in reach){ const [c,r]=k.split(',').map(Number); const steps=reach[k];
+    // cover vs nearest player
+    const np=living('player').reduce((m,p)=>{ const d=cheb({c,r},p); return d<m.d?{d,p}:m; },{d:1e9,p:null});
+    const probe={c,r,cover:true};
+    const cov = np.p? activeCoverFor({c,r,cover:coverAt(c,r)}, np.p):0;
+    const shot=bestShotFrom(e,c,r);
+    let score = TUNING.AI.coverW*cov + (shot? shot.hit + (shot.flank?TUNING.AI.flankBonus:0):0) - TUNING.AI.stepCost*steps;
+    // penalize tiles where any player flanks this position
+    let selfFlanked=false; for(const p of living('player')){ if(hasLOS(p,{c,r}) && activeCoverFor({c,r},p)===0){ selfFlanked=true; break; } }
+    if(selfFlanked) score-=TUNING.AI.selfFlankPenalty;
+    if(!bestTile||score>bestTile.score) bestTile={c,r,score,steps};
+  }
+  if(bestTile){ const from={c:e.c,r:e.r}; e.c=bestTile.c; e.r=bestTile.r; e.movedThisTurn=true; e.actions--; triggerOverwatch(e,from,{c:e.c,r:e.r}); if(!e.alive) return; }
+  // 3. after moving: shoot or overwatch
+  const shot=bestShotFrom(e,e.c,e.r);
+  if(shot && shot.hit>=TUNING.AI.shootThresh){ resolveShot(e,shot.target); e.shotThisTurn=true; e.actions=0; }
+  else { e.overwatch=true; e.actions=0; log('l',`${nm(e)} goes on overwatch.`); }
+}
+
+// ───────── win/lose ─────────
+function checkEnd(){
+  if(living('enemy').length===0){ phase='over'; banner('win','SECTOR CLEARED'); bark('h','Handler: All hostiles down. Clean work, team.'); render(); return true; }
+  if(living('player').length===0){ phase='over'; banner('lose','SQUAD WIPED'); bark('h','Handler: Squad\'s gone... falling back.'); render(); return true; }
+  return false;
+}
+function banner(kind,txt){ const b=document.getElementById('banner'); b.className='banner '+kind; b.textContent=txt; }
+function renderDiff(){ const el=document.getElementById('diffrow'); if(!el) return;
+  el.innerHTML='<span>Difficulty:</span>'+Object.keys(DIFFICULTY).map(k=>`<button class="${k===difficulty?'on':''}" onclick="setDifficulty('${k}')">${k}</button>`).join('')
+    +`<span style="margin-left:12px">Seed:</span><input id="seedval" value="${SEED}"><button onclick="newGame()">↻ new</button>`;
+}
+
+// ───────── fx / log ─────────
+function nm(u){ return (u.side==='player'?'':'')+u.cls; }
+function flashHit(u){ const e=occEls[u.id]; if(e){ e.o.classList.add('hit'); setTimeout(()=>e.o.classList.remove('hit'),300); } }
+function flashAttack(u){ u.state='attack'; u.stateTimer=Date.now()+700; }
+function floatText(u,text,cls){ const d=document.createElement('div'); d.className='floater '+cls; d.textContent=text; d.style.left=(u.c*T+T/2)+'px'; d.style.top=(u.r*T+T/2-8)+'px'; board.appendChild(d); setTimeout(()=>d.remove(),1000); }
+function tracer(a,b,cls){ const x1=a.c*T+T/2,y1=a.r*T+T/2,x2=b.c*T+T/2,y2=b.r*T+T/2; const len=Math.hypot(x2-x1,y2-y1)||1; const ang=Math.atan2(y2-y1,x2-x1)*180/Math.PI; const d=document.createElement('div'); d.className='tracer '+cls; d.style.left=x1+'px'; d.style.top=y1+'px'; d.style.width=len+'px'; d.style.transform='rotate('+ang+'deg)'; board.appendChild(d); setTimeout(()=>d.remove(),330); }
+function log(cls,msg){ const l=document.getElementById('log'); const d=document.createElement('div'); d.className='l '+cls; d.textContent=msg; l.prepend(d); }
+function bark(cls,msg){ log(cls,msg); }
+
+// ───────── animation ─────────
+let tick=0;
+function animate(){ tick++;
+  for(const u of units){ if(!u.alive) continue; const e=occEls[u.id]; if(!e) continue;
+    let st=u.state;
+    if(u.state==='attack' && Date.now()>u.stateTimer) u.state='idle';
+    const fset=frames[u.spriteKind]?.[u.state] || frames[u.spriteKind]?.idle;
+    if(fset&&fset.length){ const img=fset[tick%fset.length]; if(img) e.img.src=img.src; }
+  }
+  setTimeout(animate,120);
+}
+
+// ───────── boot ─────────
+function newGame(){
+  SEED = (document.getElementById('seedval')?.value|0) || SEED;
+  rng=createRng(SEED);
+  applyDifficulty();
+  layout(); initUnits(); selected=null; mode='idle'; pending=null; phase='player';
+  document.getElementById('banner').className='banner';
+  document.getElementById('log').innerHTML='';
+  buildBoard(); render(); renderDiff();
+  log('h',`Handler: Three hostiles, top-right [${difficulty}]. Use cover, watch your flanks. Go.`);
+}
+loadAllSprites().then(()=>{ newGame(); animate(); });
+
+// ───────── debug api ─────────
+function protoUnit(clsName){ const def=PLAYER_CLASSES[clsName]||ENEMY_CLASSES[clsName]; return { cls:clsName, aim:def.aim, crit:def.crit, critAtRange:def.critAtRange||0, weapon:def.weapon }; }
+window.DBG = {
+  hitMath, critMath, hitChance, critChance, isFlanked, hasLOS, activeCoverFor, reachable, units:()=>units, grid:()=>grid, TUNING,
+  testHit:(clsName,dist,coverLevel,opts={})=>hitMath(protoUnit(clsName),dist,coverLevel,opts.hunkered,opts.moved,opts.overwatch),
+  testCrit:(clsName,dist,flanked,hunkered)=>critMath(protoUnit(clsName),dist,flanked,hunkered),
+  u:(side,cls)=>units.find(x=>x.side===side&&x.cls===cls),
+  setSeed:(s)=>{ SEED=s; newGame(); },
+  state:()=>({phase, hp:units.map(u=>u.cls+(u.side==='enemy'?'(E)':'')+':'+ (u.alive?u.hp:'X')) }),
+};
+</script>
+</body>
+</html>

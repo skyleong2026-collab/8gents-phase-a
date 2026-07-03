@@ -1,14 +1,75 @@
 *, *::before, *::after { box-sizing: border-box; }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Ringward earthen base (Claude Design handoff: "Live Build Review" P0·2).
+   The world is warm and alive — a weathered earthen ground does the heavy
+   lifting. The cold flat-black + monospace-everywhere "terminal log" that the
+   direction set out to kill lived HERE, overriding index.html. Now the global
+   default is the earthen base in Hanken Grotesk (sans = the handler's tools).
+   Numbers opt INTO Space Mono per-element; words never render mono.
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  --rw-pitch: #120E08;   /* ground / darkest            */
+  --rw-panel: #1B160F;   /* panel base                  */
+  --rw-stone: #2A2218;   /* raised stone                */
+  --rw-edge:  #3A3025;   /* rim / border                */
+  --rw-ink:   #EFE6D6;   /* parchment ink (brightest)   */
+  --rw-gold:  #E8A040;   /* handler gold (only warm glow)*/
+  --rw-gain:  #8FE04A;   /* stat gains                  */
+  --rw-cost:  #FF6B6B;   /* costs / penalties           */
+  --rw-display: 'Cinzel', Georgia, serif;
+  --rw-serif:   'Grenze', 'Cinzel', Georgia, serif;
+  --rw-sans:    'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  --rw-mono:    'Space Mono', ui-monospace, monospace;
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
-  background: #080810;
-  color: #eee;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  color: var(--rw-ink);
+  background: var(--rw-pitch);
+  background-image: radial-gradient(120% 60% at 50% -10%, #241608 0%, #140f08 45%, #100c07 100%);
+  background-attachment: fixed;
+  font-family: var(--rw-sans);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
 
-#root {
-  min-height: 100dvh;
+#root { min-height: 100dvh; }
+
+::selection { background: #E8A04055; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Forged-material panel (P0·3 — "kill the single flat rectangle").
+   Gradient fill, warm rim, a colored top accent and a soft inner ember glow,
+   like the combat cards already do. Accent defaults to handler gold; set
+   --rw-accent inline (e.g. a type color) to retint per-section/per-card.
+   ────────────────────────────────────────────────────────────────────────── */
+.rw-panel {
+  --rw-accent: var(--rw-gold);
+  position: relative;
+  background: linear-gradient(180deg, #1C150D 0%, #120D08 100%);
+  border: 1px solid var(--rw-edge);
+  border-top: 2px solid var(--rw-accent);
+  border-radius: 12px;
+  box-shadow: inset 0 0 30px -20px var(--rw-accent);
 }
+
+/* Keystone / forged surfaces — the game's most precious element (P1). */
+.rw-panel-forged {
+  position: relative;
+  border-radius: 12px;
+  background:
+    linear-gradient(#120D08, #120D08) padding-box,
+    conic-gradient(from 0deg, #E8A040, #9be7ff, #E8A040, #9be7ff, #E8A040) border-box;
+  border: 2px solid transparent;
+  box-shadow: 0 0 22px -6px #9be7ff66, inset 0 0 30px -18px #E8A040;
+  animation: rw-forge-spin 6s linear infinite;
+}
+@keyframes rw-forge-spin { to { filter: hue-rotate(0deg); } }
+
+/* Numeric helpers (P1 — mono numbers, green gains, red costs, gold currency). */
+.rw-num  { font-family: var(--rw-mono); font-weight: 700; }
+.rw-gain { color: var(--rw-gain); }
+.rw-cost { color: var(--rw-cost); }
+.rw-curr { color: var(--rw-gold); }

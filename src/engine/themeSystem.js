@@ -21,8 +21,58 @@ import {
   CREATURE_DEFAULT_THEME,
   TIER_UNLOCK_LEVEL,
 } from '../data/themes.js';
+import { BASE, TYPE_COLORS } from '../data/designTokens.js';
+import { HUNTING_GROUNDS } from './waves.js';
 
 const STORAGE_KEY = 'ringward.themes.v1';
+
+// ── RING THEMES (vF-CA feel pass) — the look of each of the 8 rings as a backdrop. ──
+// One visual theme per ring, derived ENTIRELY from data that already exists: each ring's
+// creature cluster (waves.js HUNTING_GROUNDS) leans on ONE Type, so that Type's color (from
+// designTokens TYPE_COLORS) is the ring's accent, and its dim shade tints the dark backdrop
+// gradient. No new colors — the earthen BASE + the eight Type identities, nothing else.
+//   bgGradient   — dark → slightly-less-dark CSS gradient (a backdrop, never wallpaper)
+//   accentColor  — the ring's dominant Type color (e.g. outer ring = Reactor orange)
+//   particleHint — a tag for a FUTURE particle layer (stored, not yet implemented)
+//   label        — the ring's name, for the faint watermark
+//
+// Each ring's dominant Type + its atmosphere tag. Verified against waves.js biasIds →
+// roster types: outer=Reactor, fallen-gate=Bulwark, green-seam=Mender, storm-wire=Booster,
+// fast-trails=Striker, lightless=Assassin, witherfen=Hexer, frostbound=Warden.
+const RING_FEEL = {
+  'outer-ring':  { type: 'Reactor',  particleHint: 'embers' },
+  'fallen-gate': { type: 'Bulwark',  particleHint: 'dark'   },
+  'green-seam':  { type: 'Mender',   particleHint: 'roots'  },
+  'storm-wire':  { type: 'Booster',  particleHint: 'static' },
+  'fast-trails': { type: 'Striker',  particleHint: 'mist'   },
+  'lightless':   { type: 'Assassin', particleHint: 'void'   },
+  'witherfen':   { type: 'Hexer',    particleHint: 'spores' },
+  'frostbound':  { type: 'Warden',   particleHint: 'frost'  },
+};
+
+// Build the table once from HUNTING_GROUNDS (the ring names) + RING_FEEL (the Type/tag).
+export const RING_THEMES = Object.fromEntries(
+  HUNTING_GROUNDS.map((g) => {
+    const feel = RING_FEEL[g.id];
+    if (!feel) return [g.id, null];
+    const tc = TYPE_COLORS[feel.type] || {};
+    const dim = tc.dim || BASE.stone; // the Type's dark shade; the "slightly less dark" end
+    return [g.id, {
+      // dark (pitch) → panel → the Type's dark dim corner: an earthen backdrop, faintly
+      // colored by the ring's creatures. Stays dark enough that foreground UI keeps reading.
+      bgGradient: `linear-gradient(160deg, ${BASE.pitch} 0%, ${BASE.panel} 52%, ${dim} 100%)`,
+      accentColor: tc.color || BASE.gold,
+      particleHint: feel.particleHint,
+      label: g.name,
+    }];
+  })
+);
+
+// The theme for a ring, or null when there's no active ring (e.g. sandbox) — callers
+// render no backdrop on null (fail silently).
+export function ringTheme(ringId) {
+  return (ringId && RING_THEMES[ringId]) || null;
+}
 
 // ── True Type (the engine read) ────────────────────────────────────────────────
 // Prefers the §23 `type` field (new combat module); falls back to mapping the

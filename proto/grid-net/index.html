@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grid-Net — BN combat test (v1: custom screen)</title>
+<style>
+  :root { color-scheme: dark; }
+  html,body { margin:0; height:100%; background:#11131a; color:#cfd4e0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #wrap { display:flex; flex-direction:column; align-items:center; gap:10px; padding:14px; }
+  #goal { width:768px; max-width:96vw; font-size:14px; color:#c7cee0; background:#171b24; border:1px solid #2a2f3d; border-left:3px solid #6fc4e0; border-radius:6px; padding:8px 12px; }
+  #goal b { color:#fff; }
+  #hud { display:flex; gap:12px; flex-wrap:wrap; font-size:13px; align-items:center; width:768px; max-width:96vw; }
+  .pill { background:#1b1f29; border:1px solid #2a2f3d; border-radius:6px; padding:5px 9px; } .pill b { color:#fff; }
+  .hp b{color:#ff6f6f} .prog b{color:#ffd34d} .folder b{color:#9fe6c0}
+  #stage { position:relative; }
+  canvas { background:#06070b; border:1px solid #2a2f3d; image-rendering:pixelated; width:768px; height:480px; max-width:96vw; }
+  #legend { font-size:12px; color:#7c8396; width:768px; max-width:96vw; line-height:1.5; }
+  #log { font-size:12px; width:768px; max-width:96vw; min-height:18px; color:#9aa3b7; }
+  kbd { background:#252b38; border:1px solid #39414f; border-bottom-width:2px; border-radius:4px; padding:1px 5px; color:#dfe4ee; font-size:11px; }
+  .overlay { position:absolute; inset:0; display:none; flex-direction:column; justify-content:center; align-items:center; gap:12px; background:rgba(8,10,15,.93); text-align:center; padding:22px; box-sizing:border-box; overflow:auto; }
+  .overlay.show { display:flex; }
+  .overlay h2 { margin:0; font-size:25px; } .overlay .sub { color:#c7cee0; font-size:13px; max-width:600px; line-height:1.7; } .overlay .sub b { color:#fff; }
+  #ex-chips { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; max-width:600px; }
+  .chipcard { background:#13161e; border:1px solid #2a2f3d; border-radius:8px; padding:8px 10px; font-size:12px; min-width:120px; }
+  .chipcard .cn { font-weight:bold; } .chipcard .cd { color:#8b93a6; font-size:10.5px; }
+  button { font:inherit; font-size:14px; background:#2d6df6; color:#fff; border:0; border-radius:8px; padding:10px 20px; cursor:pointer; } button:hover { background:#3f7bff; }
+  #pad-guide { position:absolute; top:10px; right:10px; width:158px; height:128px; pointer-events:none; background:rgba(12,14,20,.55); border:1px solid #2a2f3d; border-radius:10px; }
+  .pb { position:absolute; width:80px; text-align:center; }
+  .pb .btn { width:24px; height:24px; line-height:24px; border-radius:50%; margin:0 auto 2px; font-weight:bold; font-size:12px; }
+  .pb .lbl { font-size:10px; color:#dfe4ee; text-shadow:0 1px 2px #000; }
+  .pb.y { top:8px; left:39px } .pb.x { top:48px; left:0px } .pb.b { top:48px; left:79px } .pb.a { top:88px; left:39px }
+  .y .btn { background:#E8B53A; color:#1a1206 } .x .btn { background:#3C7DC4; color:#fff } .b .btn { background:#D54B3D; color:#fff } .a .btn { background:#6CC24A; color:#0a1a06 }
+  #sig-ind { position:absolute; bottom:6px; left:50%; transform:translateX(-50%); font-size:8.5px; color:#7c8396; white-space:nowrap; }
+  #bind-list { display:flex; flex-direction:column; gap:7px; }
+  .bindrow { display:flex; align-items:center; gap:10px; background:#13161e; border:1px solid #2a2f3d; border-radius:8px; padding:8px 12px; font-size:13px; width:380px; max-width:90%; }
+  .bindrow.listening { border-color:#ffd34d; }
+  .bindrow .bn { flex:1; text-align:left; } .bindrow .bb { color:#9fe6c0; min-width:78px; text-align:right; }
+  .bindrow button { font-size:12px; padding:5px 12px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="goal">🜂 Explore to find <b style="color:#ff8f6f">encounters</b>. Each battle opens with a <b style="color:#6fc4e0">Custom screen</b> — the fight pauses; pick up to 3 chips from your hand (each shows how it hits the board), then fight real-time with what you loaded. Reload when the gauge fills. Your folder of chips is the build.</div>
+  <div id="hud">
+    <span class="pill hp">HP <b id="c-hp">100</b></span>
+    <span class="pill prog">Progress <b id="c-prog">0</b></span>
+    <span class="pill folder">Folder <b id="c-folder">5</b></span>
+    <span class="pill" id="mode-pill">Exploring</span>
+    <span class="pill" id="pad-ind" style="display:none;border-color:#3a6;color:#9fe6c0">🎮</span>
+  </div>
+  <div id="stage">
+    <canvas id="cv" width="768" height="480"></canvas>
+    <div id="pad-guide">
+      <div class="pb y"><div class="btn">Y</div><div class="lbl" id="g-y">Load/OK</div></div>
+      <div class="pb x"><div class="btn">X</div><div class="lbl" id="g-x">Buster/Pick</div></div>
+      <div class="pb b"><div class="btn">B</div><div class="lbl" id="g-b">—</div></div>
+      <div class="pb a"><div class="btn">A</div><div class="lbl" id="g-a">Use</div></div>
+      <div id="sig-ind">⚙ press C to rebind · kbd: Space/Enter/F</div>
+    </div>
+    <div id="extract" class="overlay">
+      <h2 id="ex-title" style="color:#9fe6c0">EXTRACTED</h2>
+      <div class="sub" id="ex-sub"></div>
+      <div class="sub" style="color:#8b93a6">Your folder — chips you draw from each Custom screen. Win battles to grow it:</div>
+      <div id="ex-chips"></div>
+      <button id="ex-btn">Set out again ⏎</button>
+    </div>
+    <div id="intro" class="overlay show">
+      <h2 style="color:#6fc4e0">Grid-Net</h2>
+      <div class="sub">
+        <b>Battle Network–style combat</b> inside the fog-explore loop.<br><br>
+        Walk into a red <b style="color:#ff8f6f">encounter</b> → the battle opens on a <b>Custom screen</b>: the fight <b>pauses</b>. You see the board and a hand of <b>5 chips drawn</b> from your folder — each card shows <b>exactly which tiles it hits</b>. Pick up to <b>3</b>, press OK, and the fight resumes.<br><br>
+        Now real-time: <b>move tile-to-tile</b> to dodge telegraphs, fire your loaded chips with <span style="color:#D54B3D">Use Chip</span>, and chip away with your free <span style="color:#6CC24A">Buster</span>. When the <b>Custom gauge</b> refills, hit <span style="color:#E8B53A">Load Chips</span> to pause and pick again.<br><br>
+        Win to bank progress &amp; collect <b>new chips</b> (Vulcan, Bolt, Bash, Tempest…) into your folder. Walk back to the <b style="color:#7fd0ff">start pad</b> and press <kbd>Enter</kbd> to extract. Fall in battle: lose the run's progress, never your folder.
+      </div>
+      <div style="display:flex;gap:10px"><button id="intro-btn">Set out ⏎</button><button id="intro-controls" style="background:#2a2f3d">🎮 Controls</button></div>
+    </div>
+    <div id="controls" class="overlay">
+      <h2 style="color:#9fe6c0">🎮 Controller Bindings</h2>
+      <div class="sub">Click <b>Set</b>, then press the controller button you want for that action. Movement always uses the left stick / d-pad. (Keyboard stays Space / Enter / F.)</div>
+      <div id="bind-list"></div>
+      <div style="display:flex;gap:10px;margin-top:6px"><button id="bind-reset" style="background:#2a2f3d">Reset to default</button><button id="bind-done">Done ⏎</button></div>
+    </div>
+  </div>
+  <div id="legend">
+    <b>Explore:</b> <kbd>WASD</kbd>/stick · walk into encounters · <kbd>Enter</kbd> extract · <kbd>R</kbd> new ravine<br>
+    <b>Custom (paused):</b> <kbd>◀ ▶</kbd>/<kbd>A D</kbd> move · <span style="color:#3C7DC4">select <kbd>Space</kbd>/Ⓧ</span> · <span style="color:#E8B53A">OK <kbd>F</kbd>/Ⓨ</span> &nbsp; · &nbsp; <b>Action:</b> <kbd>WASD</kbd>/stick move · <span style="color:#3C7DC4">Buster <kbd>Space</kbd>/Ⓧ</span> · <span style="color:#6CC24A">Use Chip <kbd>Enter</kbd>/Ⓐ</span> · <span style="color:#E8B53A">Load <kbd>F</kbd>/Ⓨ</span>
+  </div>
+  <div id="log">Find a fight. At the Custom screen, read the board, load your chips, then strike.</div>
+</div>
+
+<script>
+/* =========================================================================
+   GRID-NET v1 — Battle Network combat with the CUSTOM SCREEN
+   Battle = alternating CUSTOM (paused: pick up to 3 chips from a drawn hand,
+   each card shows its board pattern) and ACTION (real-time: move/dodge, fire
+   loaded chips + free buster, reload when the gauge fills). Folder = build.
+   Fog overworld + soft stakes kept. Throwaway, tunable CONFIG.
+   ========================================================================= */
+const CONFIG = {
+  WORLD_W:140, WORLD_H:44, CELL:12, VIEW_W:64, VIEW_H:40, moveSpeed:9.0, revealRadius:7.2,
+  playerHP:100, GW:6, GH:3, BCELL:84, tileMoveCd:0.12,
+  enemyStrikeDmg:14,
+  // --- telegraph timing (the three beats). Tune for fair-but-tight dodging ---
+  tgWind:0.80,        // beat 1: threatened tiles PULSE (your reaction window)
+  tgDanger:0.24,      // beat 2: tiles flash bright — strike is imminent
+  tgRecover:1.05,     // beat 3 cooldown after the strike
+  hitStop:0.05, hitStopKill:0.10, hitStopHurt:0.08,   // freeze-frames on impact
+  busterDmg:6, busterCd:0.28, customFill:5.0, selectCap:3, handSize:5, folderCap:8,
+};
+// attack types: distinct color + shape, each threatens a tile set on YOUR side (cols 0-2)
+const ATK={
+  beam:  {col:'#ff8a3a', label:'row beam'},     // whole row
+  slam:  {col:'#ffd34d', label:'tile slam'},    // your tile at windup
+  column:{col:'#5ad6ff', label:'column'},       // a full column
+  cross: {col:'#ff5ad6', label:'cross'},        // a plus shape
+};
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const C=CONFIG, WW=C.WORLD_W, WH=C.WORLD_H, CELL=C.CELL, VW=C.VIEW_W, VH=C.VIEW_H, GW=C.GW, GH=C.GH;
+const idx=(x,y)=>y*WW+x;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+let R=mulberry32(1);
+const rnd=(a,b)=>a+(b-a)*R(), ri=(a,b)=>Math.floor(rnd(a,b+1)), clamp=(v,a,b)=>v<a?a:v>b?b:v, rr=()=>Math.random();
+
+// ---- chips: each has a board PATTERN (shown on the custom card) ---------
+const CHIPS={
+  cannon:{name:'Cannon', col:'#E8B53A', dmg:22, pat:'row',   desc:'First enemy down your row'},
+  sword: {name:'Sword',  col:'#D54B3D', dmg:28, pat:'ahead', desc:'Heavy slash, enemy in front'},
+  wide:  {name:'WideShot',col:'#9fe6c0',dmg:15, pat:'rows3', desc:'Your row + above & below'},
+  guard: {name:'Guard',  col:'#3C7DC4', dmg:0,  pat:'self',  desc:'Shield — eats the next hit'},
+  shove: {name:'Shove',  col:'#6CC24A', dmg:6,  pat:'row',   desc:'Knock row enemy back (off/pit = KO)'},
+  vulcan:{name:'Vulcan', col:'#E8B53A', dmg:18, pat:'row',   desc:'Spray down your row'},
+  bolt:  {name:'Bolt',   col:'#6fc4e0', dmg:13, pat:'rows3', desc:'Three-row jolt'},
+  bash:  {name:'Bash',   col:'#D54B3D', dmg:14, pat:'row',   desc:'Hit + stun row enemy'},
+  tempest:{name:'Tempest',col:'#ffd34d',dmg:26, pat:'rows3', desc:'Storm blast, 3 rows (rare)'},
+};
+const START_COLL=['cannon','sword','wide','guard','shove'];
+const COLLECTIBLE=['vulcan','bolt','bash','tempest'];
+// transformative MOD-pieces (not chips): owning one visibly changes how a skill works
+const MODS={ pierce:{name:'Pierce Core', col:'#ffae5a', desc:'MOD: Cannon now PIERCES the whole row, not just the first enemy.'} };
+
+// ---- persistence -------------------------------------------------------
+let bank=+(localStorage.getItem('gn_bank')||0);
+let collection=(()=>{ try{ const c=JSON.parse(localStorage.getItem('gn_coll')||'null'); if(c&&c.every(k=>CHIPS[k])) return c; }catch{} return START_COLL.slice(); })();
+let folder=(()=>{ try{ const f=JSON.parse(localStorage.getItem('gn_folder')||'null'); if(f&&f.length&&f.every(k=>CHIPS[k])) return f; }catch{} return collection.slice(); })();
+let mods=(()=>{ try{ const m=JSON.parse(localStorage.getItem('gn_mods')||'null'); if(m) return m; }catch{} return []; })();
+const hasMod=k=>mods.includes(k);
+function persist(){ localStorage.setItem('gn_bank',bank); localStorage.setItem('gn_coll',JSON.stringify(collection)); localStorage.setItem('gn_folder',JSON.stringify(folder)); localStorage.setItem('gn_mods',JSON.stringify(mods)); }
+
+// ---- rebindable controller buttons -------------------------------------
+const BIND_DEF={buster:2,use:0,chip:3,select:2};   // X=2, A=0, Y=3, B=1
+let binds=(()=>{ try{ const b=JSON.parse(localStorage.getItem('gn_binds')||'null'); if(b) return Object.assign({},BIND_DEF,b);}catch{} return {...BIND_DEF}; })();
+function persistBinds(){ localStorage.setItem('gn_binds',JSON.stringify(binds)); }
+const BIND_ACTIONS=[ {k:'buster',label:'Buster (basic attack)'},{k:'use',label:'Use Chip (fire loaded)'},{k:'chip',label:'Chips: Load / OK'},{k:'select',label:'Select Chip (in Custom)'} ];
+const BTNS={0:'A',1:'B',2:'X',3:'Y',4:'LB',5:'RB',6:'LT',7:'RT',8:'Back',9:'Start',10:'L3',11:'R3',12:'D-Up',13:'D-Dn',14:'D-Lf',15:'D-Rt'};
+const btnName=i=>BTNS[i]!==undefined?BTNS[i]:('btn'+i);
+let controlsOpen=false, rebindAction=null;
+function openControls(){ controlsOpen=true; rebindAction=null; renderBinds(); document.getElementById('controls').classList.add('show'); }
+function closeControls(){ controlsOpen=false; rebindAction=null; document.getElementById('controls').classList.remove('show'); }
+function renderBinds(){ document.getElementById('bind-list').innerHTML = BIND_ACTIONS.map(a=>{ const lis=rebindAction===a.k;
+  return `<div class="bindrow ${lis?'listening':''}"><span class="bn">${a.label}</span><span class="bb">${lis?'… press a button':btnName(binds[a.k])}</span><button onclick="startRebind('${a.k}')">${lis?'…':'Set'}</button></div>`; }).join(''); }
+function startRebind(k){ rebindAction=k; renderBinds(); }
+window.startRebind=startRebind;
+
+let runNo=0, state, mode='overworld', hitStop=0;
+
+// ===== OVERWORLD ========================================================
+function newRun(){
+  runNo++; R=mulberry32((runNo*2654435761 ^ 0x9e3779b9)>>>0);
+  const ground=new Float32Array(WW*WH), seen=new Uint8Array(WW*WH);
+  for(let i=0;i<ground.length;i++) ground[i]=R()<0.16?0:1;
+  const startX=8, startY=(WH/2)|0;
+  for(let y=startY-3;y<=startY+3;y++)for(let x=startX-3;x<=startX+3;x++) if(x>=0&&y>=0&&x<WW&&y<WH) ground[idx(x,y)]=1;
+  const nodes=[]; let tries=0;
+  while(nodes.length<7 && tries++<400){ const x=ri(16,WW-3), y=ri(2,WH-3);
+    if(ground[idx(x,y)]===1 && Math.hypot(x-startX,y-startY)>10 && nodes.every(n=>Math.hypot(n.x-x,n.y-y)>8)) nodes.push({x:x+0.5,y:y+0.5,enemies:ri(1,3),cleared:false}); }
+  state={ ground,seen, player:{x:startX+0.5,y:startY+0.5,vx:0,vy:0,hp:C.playerHP}, startX:startX+0.5,startY:startY+0.5,
+    nodes, runProgress:0, cam:{x:0,y:0}, keys:{}, explored:0, over:false, log:[], fx:[], shake:0, padMove:{x:0,y:0} };
+  revealAround(startX,startY,9); mode='overworld';
+  logEvent(`A new ravine — ${nodes.length} encounters out there.`);
+  document.getElementById('extract').classList.remove('show'); document.getElementById('mode-pill').textContent='Exploring';
+  window.state=state; syncGuide(); syncHud();
+}
+function revealAround(cx,cy,rad){ const {seen}=state,r2=rad*rad; for(let y=Math.max(0,(cy-rad)|0);y<=Math.min(WH-1,(cy+rad)|0);y++)for(let x=Math.max(0,(cx-rad)|0);x<=Math.min(WW-1,(cx+rad)|0);x++) if((x-cx)**2+(y-cy)**2<=r2) seen[idx(x,y)]=1; }
+function gGround(x,y){ return state.ground[idx(clamp(x|0,0,WW-1),clamp(y|0,0,WH-1))]; }
+function logEvent(s){ if(state) state.log.push(s); document.getElementById('log').textContent=s; }
+function stepOverworld(dt){
+  const p=state.player,k=state.keys; let ix=0,iy=0;
+  if(k['KeyA']||k['ArrowLeft'])ix-=1; if(k['KeyD']||k['ArrowRight'])ix+=1; if(k['KeyW']||k['ArrowUp'])iy-=1; if(k['KeyS']||k['ArrowDown'])iy+=1;
+  const mk=Math.hypot(ix,iy); if(mk>0){ix/=mk;iy/=mk;} const pm=state.padMove; if(Math.hypot(pm.x,pm.y)>0.2){ix=pm.x;iy=pm.y;}
+  const mag=Math.min(1,Math.hypot(ix,iy)),sp=C.moveSpeed;
+  if(mag>0.05){ const n=Math.hypot(ix,iy); p.vx+=(ix/n*sp-p.vx)*Math.min(1,26*dt); p.vy+=(iy/n*sp-p.vy)*Math.min(1,26*dt); } else { p.vx-=p.vx*Math.min(1,16*dt); p.vy-=p.vy*Math.min(1,16*dt); }
+  let nx=clamp(p.x+p.vx*dt,0.5,WW-0.5), ny=clamp(p.y+p.vy*dt,0.5,WH-0.5);
+  if(gGround(nx,ny)===0){ if(gGround(nx,p.y)===1)ny=p.y; else if(gGround(p.x,ny)===1)nx=p.x; else {nx=p.x;ny=p.y;} p.vx=p.vy=0; }
+  p.x=nx; p.y=ny; revealAround(p.x,p.y,C.revealRadius);
+  for(const nd of state.nodes){ if(!nd.cleared && Math.hypot(nd.x-p.x,nd.y-p.y)<0.9){ enterBattle(nd); return; } }
+  state.nearStart=Math.hypot(p.x-state.startX,p.y-state.startY)<2.2 && state.runProgress>0;
+}
+
+// ===== BATTLE ===========================================================
+// enemy types — distinct shape (drawn in drawGrid), color, size, HP, attack repertoire
+const ENEMIES={
+  grunt: {hp:22, col:'#e0734d', size:13, shape:'tri',     atks:['slam','slam','beam'],     windScale:0.82},
+  lancer:{hp:30, col:'#d54b4b', size:16, shape:'diamond', atks:['beam','beam','slam'],     windScale:1.0},
+  tower: {hp:48, col:'#9b6fd0', size:21, shape:'square',  atks:['column','cross','beam'],  windScale:1.25},
+};
+const ETYPES=['grunt','lancer','tower'];
+function enterBattle(node){
+  mode='battle';
+  const enemies=[]; for(let i=0;i<node.enemies;i++){ const ty=ETYPES[ri(0,ETYPES.length-1)]; enemies.push(mkEnemy(ri(3,5),i%GH,ty)); }
+  state.battle={ node, phase:'custom', player:{col:0,row:1,moveCd:0,inv:0,shield:0,hurt:0,buster:0,flash:0}, enemies,
+    customGauge:1, drawn:[], sel:[], queue:[], cursor:0, hazards:pickHazards(), result:null, t:0, lastVert:1, hitStop:0 };
+  drawHand();
+  document.getElementById('mode-pill').textContent='⚔ CUSTOM'; logEvent('Custom screen — read the board, pick up to 3 chips.'); syncHud();
+}
+function mkEnemy(col,row,type){ const d=ENEMIES[type]; return {col,row,type,hp:d.hp,max:d.hp,alive:true,flash:0,stun:0,st:'idle',timer:rnd(0.4,1.2),atk:null,tiles:[]}; }
+function pickHazards(){ const h=[],n=ri(1,2); for(let i=0;i<n;i++) h.push({col:ri(4,5),row:ri(0,GH-1)}); return h; }
+function isHazard(col,row){ return state.battle.hazards.some(z=>z.col===col&&z.row===row); }
+function firstInRow(row){ let b=null; for(const e of state.battle.enemies){ if(e.alive&&e.row===row){ if(!b||e.col<b.col) b=e; } } return b; }
+function dmgEnemy(e,d){ if(!e||!e.alive)return; e.hp-=d; e.flash=0.16; if(d>0){ fxNum(e.col,e.row,d,'#ffe0c0'); fxB(e.col,e.row,'#ffd0c0',6); }
+  hitStop=Math.max(hitStop,C.hitStop);
+  if(e.hp<=0){ e.alive=false; fxB(e.col,e.row,ENEMIES[e.type].col,18); fxRing(e.col,e.row,'#fff',1.0); shake(5); hitStop=Math.max(hitStop,C.hitStopKill); } }
+
+// --- custom screen ------------------------------------------------------
+function drawHand(){ const B=state.battle; const src=folder.length?folder:collection; B.drawn=[]; for(let i=0;i<C.handSize;i++) B.drawn.push(src[ri(0,src.length-1)]); B.sel=[]; B.cursor=0; B.phase='custom'; document.getElementById('mode-pill').textContent='⚔ CUSTOM'; }
+function custMove(d){ const B=state.battle; if(B.phase!=='custom')return; B.cursor=clamp(B.cursor+d,0,B.drawn.length-1); }
+function custToggle(){ const B=state.battle; if(B.phase!=='custom')return; const i=B.cursor, at=B.sel.indexOf(i);
+  if(at>=0) B.sel.splice(at,1); else if(B.sel.length<C.selectCap) B.sel.push(i); }
+function custConfirm(){ const B=state.battle; if(B.phase!=='custom')return; B.queue=B.sel.map(i=>B.drawn[i]); B.phase='action'; B.customGauge=0;
+  document.getElementById('mode-pill').textContent='⚔ ACTION'; logEvent(B.queue.length?`Loaded ${B.queue.length} chip(s). Fire with Use Chip.`:'No chips loaded — buster only this round.'); }
+
+// --- chip effects (action) ----------------------------------------------
+function applyChip(key){ const B=state.battle, p=B.player, ch=CHIPS[key];
+  if(ch.pat==='row'||ch.pat==='ahead'){
+    if(key==='cannon'&&hasMod('pierce')){                       // MOD transforms Cannon: pierce the WHOLE row
+      for(const e of B.enemies){ if(e.alive&&e.row===p.row){ dmgEnemy(e,ch.dmg); fxRing(e.col,e.row,'#ffae5a',0.9); } }
+      fxLane(p.row,'#ffae5a'); fxLane(p.row,'#ffae5a',true);
+    } else { const e=firstInRow(p.row); dmgEnemy(e,ch.dmg); fxLane(p.row,ch.col);
+      if(key==='sword'&&e) fxSlash(e.col,e.row,ch.col);
+      if(key==='cannon'&&e) fxRing(e.col,e.row,ch.col,0.9);
+      if(key==='shove'&&e&&e.alive){ fxB(e.col,e.row,'#6CC24A',10); e.col+=1; if(e.col>=GW||isHazard(e.col,e.row)){ e.alive=false; fxB(e.col-1,e.row,'#6CC24A',16); fxRing(e.col-1,e.row,'#6CC24A',1.0); shake(6); logEvent('Shoved into the void!'); } }
+      if(key==='bash'&&e&&e.alive){ e.stun=1.4; fxRing(e.col,e.row,'#D54B3D',0.8); } }
+  }
+  else if(ch.pat==='rows3'){ for(const dr of [-1,0,1]){ const r=p.row+dr; if(r<0||r>=GH)continue; dmgEnemy(firstInRow(r),ch.dmg); fxLane(r,ch.col); } shake(key==='tempest'?7:4); if(key==='tempest'){ fxRing(p.col,p.row,'#ffd34d',1.5); } }
+  else if(ch.pat==='self'){ p.shield=4.0; fxB(0,p.row,'#3C7DC4',10); fxRing(0,p.row,'#3C7DC4',0.8); }
+  checkWin();
+}
+function fireChip(){ const B=state.battle; if(!B||B.phase!=='action'||B.result||!B.queue.length)return; applyChip(B.queue.shift()); }
+function buster(){ const B=state.battle; if(!B||B.phase!=='action'||B.result||B.player.buster>0)return; B.player.buster=C.busterCd; dmgEnemy(firstInRow(B.player.row),C.busterDmg); fxLane(B.player.row,'#dfe4ee'); }
+function loadCustom(){ const B=state.battle; if(!B||B.phase!=='action'||B.result||B.customGauge<1)return; drawHand(); logEvent('Custom screen — pick again.'); }
+function checkWin(){ const B=state.battle; if(B.result)return; if(B.enemies.every(e=>!e.alive)) winBattle(); }
+function winBattle(){ const B=state.battle; B.result='win'; B.node.cleared=true; state.runProgress+=1;
+  const pool=COLLECTIBLE.filter(k=>!collection.includes(k)); let got=null;
+  if(pool.length&&R()<0.55){ got=pool[ri(0,pool.length-1)]; collection.push(got); if(folder.length<C.folderCap) folder.push(got); persist(); }
+  let modGot=null; if(!hasMod('pierce')&&R()<0.4){ mods.push('pierce'); persist(); modGot='pierce'; }
+  logEvent(modGot?`Battle won! +1 progress — found a MOD: ${MODS.pierce.name}! Cannon now pierces.`:(got?`Battle won! +1 progress, new chip: ${CHIPS[got].name}!`:'Battle won! +1 progress.'));
+  setTimeout(()=>{ mode='overworld'; document.getElementById('mode-pill').textContent='Exploring'; syncHud(); },700); }
+function loseBattle(){ state.battle.result='lose'; logEvent('You fell in battle.'); setTimeout(()=>endRun(false),600); }
+
+function stepBattle(dt){ const B=state.battle, p=B.player; if(B.phase!=='action')return;   // CUSTOM = fully paused
+  B.t+=dt; p.moveCd=Math.max(0,p.moveCd-dt); p.inv=Math.max(0,p.inv-dt); p.hurt=Math.max(0,p.hurt-dt); p.buster=Math.max(0,p.buster-dt);
+  if(p.shield>0)p.shield=Math.max(0,p.shield-dt); B.customGauge=Math.min(1,B.customGauge+dt/C.customFill);
+  const k=state.keys; let dx=0,dy=0;
+  if(k['KeyA']||k['ArrowLeft'])dx-=1; if(k['KeyD']||k['ArrowRight'])dx+=1; if(k['KeyW']||k['ArrowUp'])dy-=1; if(k['KeyS']||k['ArrowDown'])dy+=1;
+  const pm=state.padMove; if(Math.abs(pm.x)>0.5)dx=Math.sign(pm.x); if(Math.abs(pm.y)>0.5)dy=Math.sign(pm.y);
+  if(dy!==0)B.lastVert=dy;
+  if(p.moveCd<=0&&(dx||dy)){ const nc=clamp(p.col+Math.sign(dx),0,2), nr=clamp(p.row+Math.sign(dy),0,GH-1); if(nc!==p.col||nr!==p.row){ p.col=nc;p.row=nr;p.moveCd=C.tileMoveCd; } }
+  for(const e of B.enemies){ if(!e.alive)continue; e.flash=Math.max(0,e.flash-dt); e.stun=Math.max(0,e.stun-dt); if(e.stun>0)continue; e.timer-=dt;
+    const ed=ENEMIES[e.type];
+    if(e.st==='idle'){ if(e.timer<=0){ if(R()<0.62){ const at=ed.atks[ri(0,ed.atks.length-1)]; e.atk=at; e.tiles=atkTiles(at,e,p); e.st='wind'; e.timer=C.tgWind*ed.windScale; }
+        else { e.col=clamp(e.col+(R()<0.5?-1:1),3,5); e.row=clamp(e.row+(R()<0.5?-1:R()<0.5?1:0),0,GH-1); e.timer=rnd(0.4,0.9); } } }
+    else if(e.st==='wind'){ if(e.timer<=0){ e.st='danger'; e.timer=C.tgDanger; } }            // beat 2: imminent
+    else if(e.st==='danger'){ if(e.timer<=0){                                                  // beat 3: STRIKE
+        const struck=e.tiles.some(t=>t.c===p.col&&t.r===p.row); if(struck) hitPlayer(C.enemyStrikeDmg);
+        fxTileFlash(e.tiles, ATK[e.atk].col); shake(struck?7:3.5); e.st='recover'; e.timer=C.tgRecover; } }
+    else if(e.st==='recover'){ if(e.timer<=0){ e.st='idle'; e.timer=rnd(0.5,1.2); } } }
+}
+// which YOUR-side tiles (cols 0-2) an attack threatens — snapshot at windup so you can dodge
+function atkTiles(type,e,p){
+  if(type==='beam')   return [0,1,2].map(c=>({c,r:e.row}));
+  if(type==='slam')   return [{c:p.col,r:p.row}];
+  if(type==='column'){ const c=p.col; return [0,1,2].map(r=>({c,r})); }
+  if(type==='cross'){ const t=[{c:p.col,r:p.row}]; for(const [dc,dr] of [[1,0],[-1,0],[0,1],[0,-1]]){ const c=p.col+dc,r=p.row+dr; if(c>=0&&c<=2&&r>=0&&r<GH) t.push({c,r}); } return t; }
+  return [];
+}
+function hitPlayer(d){ const p=state.battle.player; if(p.inv>0)return; if(p.shield>0){ p.shield=0; fxB(p.col,p.row,'#3C7DC4',12); fxRing(p.col,p.row,'#3C7DC4',1.0); logEvent('Guard absorbed the hit!'); return; }
+  state.player.hp-=d; p.hurt=0.32; p.flash=0.16; fxNum(p.col,p.row,d,'#ff8a8a'); shake(6); hitStop=Math.max(hitStop,C.hitStopHurt); syncHud(); if(state.player.hp<=0&&!state.battle.result) loseBattle(); }
+
+// --- battle fx ----------------------------------------------------------
+function gridOx(){ return (cv.width-GW*C.BCELL)/2; } function gridOy(){ return (cv.height-GH*C.BCELL)/2-2; }
+function tileCenter(col,row){ return {x:gridOx()+col*C.BCELL+C.BCELL/2, y:gridOy()+row*C.BCELL+C.BCELL/2}; }
+function fxB(col,row,color,n){ const c=tileCenter(col,row); for(let i=0;i<n;i++){const a=rr()*6.28,s=120*(0.4+rr()*0.7); state.fx.push({x:c.x,y:c.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:0.4,max:0.4,color,size:2+rr()*3});} }
+function fxLane(row,color,danger){ state.fx.push({type:'lane',row,color,life:danger?0.3:0.25,max:danger?0.3:0.25,danger}); }
+function fxNum(col,row,val,color){ const c=tileCenter(col,row); state.fx.push({type:'num',x:c.x+rnd(-8,8),y:c.y-14,vy:-46,val,color,life:0.7,max:0.7}); }
+function fxRing(col,row,color,sc){ const c=tileCenter(col,row); state.fx.push({type:'ring',x:c.x,y:c.y,color,r0:6,r1:(sc||1)*46,life:0.4,max:0.4}); }
+function fxTileFlash(tiles,color){ for(const t of tiles){ const c=tileCenter(t.c,t.r); state.fx.push({type:'tflash',x:c.x,y:c.y,color,life:0.28,max:0.28}); } }
+function fxSlash(col,row,color){ const c=tileCenter(col,row); state.fx.push({type:'slash',x:c.x,y:c.y,color,life:0.22,max:0.22}); }
+function shake(a){ state.shake=Math.max(state.shake,a); }
+function stepFx(dt){ state.shake=Math.max(0,state.shake-dt*36);
+  for(const f of state.fx){ f.life-=dt; if(f.type==='p'||f.type===undefined){f.x+=f.vx*dt;f.y+=f.vy*dt;f.vx*=0.9;f.vy*=0.9;} else if(f.type==='num'){ f.y+=f.vy*dt; f.vy*=0.92; } }
+  state.fx=state.fx.filter(f=>f.life>0); }
+
+// --- board-pattern preview (the "how it hits the board" diagram) --------
+function patternTiles(pat,prow){ const t=[];
+  if(pat==='row'||pat==='ahead'){ for(let c=3;c<6;c++) t.push([c,prow]); }
+  else if(pat==='rows3'){ for(const dr of[-1,0,1]){ const r=prow+dr; if(r<0||r>=GH)continue; for(let c=3;c<6;c++) t.push([c,r]); } }
+  else if(pat==='self'){ t.push([0,prow]); }
+  return t;
+}
+function drawMini(x,y,key,prow){ const cs=11, col=CHIPS[key].col, hits=patternTiles(CHIPS[key].pat,prow);
+  for(let r=0;r<GH;r++)for(let c=0;c<GW;c++){ const px=x+c*cs,py=y+r*cs, hit=hits.some(h=>h[0]===c&&h[1]===r);
+    ctx.fillStyle = hit?col : (c<3?'#1b2330':'#2a1a20'); ctx.fillRect(px+1,py+1,cs-2,cs-2); }
+  ctx.fillStyle='#7fd0ff'; ctx.fillRect(x+1,y+prow*cs+1,cs-2,cs-2);   // player marker
+}
+
+// ===== EXTRACT ==========================================================
+function tryExtract(){ if(mode!=='overworld')return; const p=state.player; if(Math.hypot(p.x-state.startX,p.y-state.startY)>2.4){ logEvent('Return to the start pad to extract.'); return; } endRun(true); }
+function endRun(won){ state.over=true; mode='done'; bank+=won?state.runProgress:0; persist();
+  document.getElementById('ex-title').textContent=won?'EXTRACTED':'YOU FELL BACK'; document.getElementById('ex-title').style.color=won?'#9fe6c0':'#ff6f6f';
+  document.getElementById('ex-sub').innerHTML=won?`Banked <b>${state.runProgress}</b> progress. Total: <b>${bank}</b>.`:`Lost this run's progress — your folder &amp; bank are safe (total ${bank}).`;
+  renderFolderScreen(); document.getElementById('extract').classList.add('show'); }
+function renderFolderScreen(){
+  document.getElementById('ex-chips').innerHTML = collection.map(k=>{ const c=CHIPS[k], inF=folder.includes(k);
+    const piercy = k==='cannon'&&hasMod('pierce') ? ' <b style="color:#ffae5a">[PIERCE]</b>' : '';
+    return `<div class="chipcard ${inF?'equipped':''}" onclick="toggleFolder('${k}')"><div class="cn" style="color:${c.col}">${inF?'✓ ':''}${c.name}</div><div class="cd">${c.desc}${piercy}</div></div>`; }).join('')
+    + mods.map(m=>`<div class="chipcard" style="border-color:#ffae5a"><div class="cn" style="color:#ffae5a">✦ ${MODS[m].name}</div><div class="cd">${MODS[m].desc}</div></div>`).join('');
+}
+function toggleFolder(k){ const i=folder.indexOf(k); if(i>=0){ if(folder.length>1) folder.splice(i,1); } else if(folder.length<C.folderCap) folder.push(k); persist(); renderFolderScreen(); syncHud(); }
+window.toggleFolder=toggleFolder;
+
+// ===== INPUT ============================================================
+let introOpen=true; function closeIntro(){ introOpen=false; document.getElementById('intro').classList.remove('show'); }
+addEventListener('keydown',e=>{
+  if(controlsOpen){ if(e.code==='Escape'||e.code==='Enter'){ e.preventDefault(); closeControls(); } return; }
+  if(introOpen){ if(e.code==='Enter'||e.code==='Space'){e.preventDefault();closeIntro();} return; }
+  if(e.code==='KeyC'){ openControls(); return; }
+  if(e.code==='KeyR'){ newRun(); return; }
+  if(state.over){ if(e.code==='Enter') newRun(); return; }
+  state.keys[e.code]=true;
+  if(mode==='overworld'){ if(e.code==='Enter') tryExtract(); return; }
+  if(mode==='battle'){ const B=state.battle;
+    if(B.phase==='custom'){ if(e.code==='ArrowLeft'||e.code==='KeyA') custMove(-1); if(e.code==='ArrowRight'||e.code==='KeyD') custMove(1);
+      if(e.code==='Space'&&!e.repeat){ e.preventDefault(); custToggle(); } if((e.code==='KeyF'||e.code==='Enter')&&!e.repeat) custConfirm(); return; }
+    // action — X/Space = Buster, A/Enter = Use Chip, Y/F = Load
+    if(e.code==='Space'){ e.preventDefault(); buster(); } if(e.code==='Enter'||e.code==='KeyE') fireChip(); if(e.code==='KeyF') loadCustom();
+  }
+});
+addEventListener('keyup',e=>{ state.keys[e.code]=false; });
+let mouseC={x:0,y:0};
+function canvasXY(e){ const r=cv.getBoundingClientRect(); return {x:(e.clientX-r.left)*(cv.width/r.width), y:(e.clientY-r.top)*(cv.height/r.height)}; }
+cv.addEventListener('mousemove',e=>{ mouseC=canvasXY(e); if(introOpen||state.over||mode!=='battle')return; const B=state.battle;
+  if(B&&B.phase==='custom'&&B.cardRects){ for(const cr of B.cardRects){ if(mouseC.x>=cr.x&&mouseC.x<=cr.x+cr.w&&mouseC.y>=cr.y&&mouseC.y<=cr.y+cr.h){ B.cursor=cr.i; break; } } } });
+cv.addEventListener('mousedown',e=>{ e.preventDefault(); if(introOpen||state.over||mode!=='battle')return; const B=state.battle; const m=canvasXY(e);
+  if(B.phase==='action'){ buster(); return; }
+  if(B.okRect&&m.x>=B.okRect.x&&m.x<=B.okRect.x+B.okRect.w&&m.y>=B.okRect.y&&m.y<=B.okRect.y+B.okRect.h){ custConfirm(); return; }
+  if(B.cardRects){ for(const cr of B.cardRects){ if(m.x>=cr.x&&m.x<=cr.x+cr.w&&m.y>=cr.y&&m.y<=cr.y+cr.h){ B.cursor=cr.i; custToggle(); return; } } } });
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+document.getElementById('intro-btn').addEventListener('click',closeIntro);
+document.getElementById('ex-btn').addEventListener('click',newRun);
+document.getElementById('intro-controls').addEventListener('click',openControls);
+document.getElementById('bind-done').addEventListener('click',closeControls);
+document.getElementById('bind-reset').addEventListener('click',()=>{ binds={...BIND_DEF}; persistBinds(); renderBinds(); syncGuide(); });
+
+// ---- gamepad -----------------------------------------------------------
+let padPrev=[], padNavReady=true;
+function pollPad(){ const pads=navigator.getGamepads?navigator.getGamepads():[]; let gp=null; for(const q of pads){if(q){gp=q;break;}}
+  document.getElementById('pad-ind').style.display=gp?'inline-block':'none'; if(!gp){ state.padMove={x:0,y:0}; return; }
+  const dz=v=>Math.abs(v)<0.25?0:v; let mx=dz(gp.axes[0]||0),my=dz(gp.axes[1]||0);
+  if(gp.buttons[14]&&gp.buttons[14].pressed)mx=-1; if(gp.buttons[15]&&gp.buttons[15].pressed)mx=1; if(gp.buttons[12]&&gp.buttons[12].pressed)my=-1; if(gp.buttons[13]&&gp.buttons[13].pressed)my=1;
+  state.padMove={x:mx,y:my}; const b=gp.buttons.map(x=>x.pressed), hit=i=>b[i]&&!padPrev[i];
+  if(rebindAction){ for(let i=0;i<b.length;i++){ if(b[i]&&!padPrev[i]){ binds[rebindAction]=i; rebindAction=null; persistBinds(); renderBinds(); syncGuide(); break; } } padPrev=b; return; }
+  if(controlsOpen){ padPrev=b; return; }
+  if(introOpen){ if(hit(0)||hit(9))closeIntro(); }
+  else if(state.over){ if(hit(0))newRun(); }
+  else if(mode==='battle'){ const B=state.battle;
+    if(B.phase==='custom'){ const ax=gp.axes[0]||0;
+      if(Math.abs(ax)>0.5){ if(padNavReady){ custMove(ax<0?-1:1); padNavReady=false; } } else if(Math.abs(ax)<0.3) padNavReady=true;
+      if(hit(14))custMove(-1); if(hit(15))custMove(1); if(hit(binds.select))custToggle(); if(hit(binds.chip)||hit(9))custConfirm(); }
+    else { if(hit(binds.buster))buster(); if(hit(binds.use))fireChip(); if(hit(binds.chip))loadCustom(); } }
+  else if(mode==='overworld'){ if(hit(9))tryExtract(); }
+  padPrev=b;
+}
+
+// ===== RENDER ===========================================================
+let last=0, perf=0;
+function render(){ ctx.save(); if(state.shake>0.1) ctx.translate((Math.random()*2-1)*state.shake,(Math.random()*2-1)*state.shake);
+  if(mode==='battle') renderBattle(); else renderOverworld(); ctx.restore(); }
+function renderOverworld(){ const cam=state.cam,p=state.player; cam.x=clamp(p.x-VW/2,0,WW-VW); cam.y=clamp(p.y-VH/2,0,WH-VH);
+  const {ground,seen}=state; const x0=Math.floor(cam.x),y0=Math.floor(cam.y);
+  for(let vy=-1;vy<=VH;vy++)for(let vx=-1;vx<=VW;vx++){ const wx=x0+vx,wy=y0+vy; if(wx<0||wy<0||wx>=WW||wy>=WH)continue; const i=idx(wx,wy),sx=(wx-cam.x)*CELL,sy=(wy-cam.y)*CELL;
+    if(!seen[i]){ ctx.fillStyle='#06070b'; ctx.fillRect(sx,sy,CELL+1,CELL+1); continue; } ctx.fillStyle=ground[i]===0?'#1a2b46':'#2a2f3d'; ctx.fillRect(sx,sy,CELL+1,CELL+1); }
+  const toS=(wx,wy)=>({x:(wx-cam.x)*CELL,y:(wy-cam.y)*CELL});
+  if(seen[idx(state.startX|0,state.startY|0)]){ const s=toS(state.startX,state.startY); ctx.strokeStyle='#7fd0ff'; ctx.lineWidth=2; ctx.strokeRect(s.x-9,s.y-9,18,18); ctx.fillStyle='#7fd0ff'; ctx.font='10px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('START / EXTRACT',s.x,s.y-13); }
+  for(const nd of state.nodes){ if(nd.cleared||!seen[idx(nd.x|0,nd.y|0)])continue; const s=toS(nd.x,nd.y),pul=0.5+0.5*Math.sin(perf*5);
+    ctx.fillStyle=`rgba(255,120,90,${0.15+pul*0.2})`; ctx.beginPath(); ctx.arc(s.x,s.y,12+pul*4,0,7); ctx.fill(); ctx.fillStyle='#ff8f6f'; ctx.beginPath(); ctx.arc(s.x,s.y,6,0,7); ctx.fill(); ctx.fillStyle='#ffd0c0'; ctx.font='9px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('⚔ '+nd.enemies,s.x,s.y-12); }
+  const pls=toS(state.player.x,state.player.y),R0=(C.revealRadius-2)*CELL,R1=(C.revealRadius+2.5)*CELL;
+  const grd=ctx.createRadialGradient(pls.x,pls.y,R0,pls.x,pls.y,R1); grd.addColorStop(0,'rgba(6,7,11,0)'); grd.addColorStop(1,'rgba(6,7,11,0.62)'); ctx.fillStyle=grd; ctx.fillRect(-24,-24,cv.width+48,cv.height+48);
+  ctx.fillStyle='#7fd0ff'; ctx.beginPath(); ctx.arc(pls.x,pls.y,7,0,7); ctx.fill();
+  for(const f of state.fx){ const a=clamp(f.life/f.max,0,1); ctx.globalAlpha=a; ctx.fillStyle=f.color; ctx.fillRect(f.x-2,f.y-2,4,4); } ctx.globalAlpha=1;
+  if(state.nearStart){ ctx.fillStyle='rgba(127,208,255,.95)'; ctx.font='bold 13px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(`▽ ENTER / ☰ to extract (${state.runProgress}) ▽`,cv.width/2,26); }
+  ctx.textAlign='left';
+}
+// optional sprite hook — drop real PNGs in /sprites later; falls back to shapes if absent
+const SPRITES={}; function loadSprite(key,file){ const img=new Image(); img.onload=()=>{ if(img.naturalWidth>0) SPRITES[key]=img; }; img.onerror=()=>{}; img.src='sprites/'+file; }
+loadSprite('player','player.png'); loadSprite('enemy_grunt','enemy_grunt.png'); loadSprite('enemy_lancer','enemy_lancer.png'); loadSprite('enemy_tower','enemy_tower.png');
+function hexA(h,a){ const n=parseInt(h.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+function drawEnemy(e){ const d=ENEMIES[e.type], t=tileCenter(e.col,e.row), s=d.size, img=SPRITES['enemy_'+e.type];
+  if(img){ ctx.globalAlpha=e.flash>0?0.85:1; ctx.drawImage(img,t.x-s,t.y-s,s*2,s*2); ctx.globalAlpha=1; }
+  else { ctx.fillStyle=e.flash>0?'#fff':(e.stun>0?'#caa':d.col); ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=1.5;
+    if(d.shape==='tri'){ ctx.beginPath(); ctx.moveTo(t.x,t.y-s); ctx.lineTo(t.x+s,t.y+s*0.85); ctx.lineTo(t.x-s,t.y+s*0.85); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    else if(d.shape==='diamond'){ ctx.beginPath(); ctx.moveTo(t.x,t.y-s); ctx.lineTo(t.x+s*0.75,t.y); ctx.lineTo(t.x,t.y+s); ctx.lineTo(t.x-s*0.75,t.y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    else { ctx.fillRect(t.x-s,t.y-s,s*2,s*2); ctx.strokeRect(t.x-s,t.y-s,s*2,s*2); } }
+  if(e.stun>0){ ctx.fillStyle='#ffd34d'; ctx.font='12px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('✦',t.x,t.y-s-6); }
+  ctx.fillStyle='#000'; ctx.fillRect(t.x-18,t.y-s-12,36,4); ctx.fillStyle='#ff7a5a'; ctx.fillRect(t.x-18,t.y-s-12,36*clamp(e.hp/e.max,0,1),4); ctx.textAlign='left';
+}
+function drawPlayer(p){ const t=tileCenter(p.col,p.row), img=SPRITES['player']; ctx.globalAlpha=p.inv>0?0.5:1;
+  if(img){ ctx.drawImage(img,t.x-16,t.y-16,32,32); }
+  else { ctx.fillStyle=(p.hurt>0||p.flash>0)?'#ff8a8a':'#7fd0ff'; ctx.strokeStyle='#cdeaff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(t.x,t.y,14,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#06121c'; ctx.beginPath(); ctx.moveTo(t.x+2,t.y-7); ctx.lineTo(t.x+11,t.y); ctx.lineTo(t.x+2,t.y+7); ctx.closePath(); ctx.fill(); }
+  ctx.globalAlpha=1;
+  if(p.shield>0){ ctx.strokeStyle='#3C7DC4'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(t.x,t.y,21,0,7); ctx.stroke(); }
+}
+function drawGrid(){ const B=state.battle, ox=gridOx(), oy=gridOy(), bc=C.BCELL;
+  for(let r=0;r<GH;r++)for(let c=0;c<GW;c++){ const x=ox+c*bc,y=oy+r*bc; ctx.fillStyle=c<3?'#16202e':'#2a1820'; ctx.fillRect(x+2,y+2,bc-4,bc-4);
+    if(isHazard(c,r)){ ctx.fillStyle='#0a0a12'; ctx.fillRect(x+10,y+10,bc-20,bc-20); ctx.strokeStyle='#553'; ctx.strokeRect(x+10,y+10,bc-20,bc-20); }
+    ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.lineWidth=1; ctx.strokeRect(x+2,y+2,bc-4,bc-4); }
+  for(const f of state.fx){ if(f.type==='lane'){ const a=clamp(f.life/f.max,0,1); ctx.globalAlpha=f.danger?0.9:a*0.5; ctx.fillStyle=f.color; ctx.fillRect(ox,oy+f.row*bc+2,GW*bc,bc-4); ctx.globalAlpha=1; } }
+  // TELEGRAPHS — beat 1 (wind) pulses; beat 2 (danger) bright. color+shape per attack.
+  for(const e of B.enemies){ if(!e.alive||(e.st!=='wind'&&e.st!=='danger'))continue; const col=ATK[e.atk].col;
+    const a=e.st==='danger'?0.6:(0.16+0.18*Math.abs(Math.sin(perf*9)));
+    for(const t of e.tiles){ const x=ox+t.c*bc,y=oy+t.r*bc; ctx.fillStyle=hexA(col,a); ctx.fillRect(x+2,y+2,bc-4,bc-4); ctx.strokeStyle=col; ctx.lineWidth=e.st==='danger'?3:1.5; ctx.strokeRect(x+3,y+3,bc-6,bc-6); } }
+  // strike tile-flashes
+  for(const f of state.fx){ if(f.type==='tflash'){ const a=clamp(f.life/f.max,0,1); ctx.fillStyle=hexA(f.color,a*0.85); ctx.fillRect(f.x-bc/2+2,f.y-bc/2+2,bc-4,bc-4); } }
+  for(const e of B.enemies){ if(!e.alive)continue; drawEnemy(e); }
+  drawPlayer(B.player);
+  // fx: rings, slashes, numbers, particles
+  for(const f of state.fx){ const a=clamp(f.life/f.max,0,1);
+    if(f.type==='lane'||f.type==='tflash')continue;
+    else if(f.type==='ring'){ ctx.globalAlpha=a; ctx.strokeStyle=f.color; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(f.x,f.y,f.r0+(f.r1-f.r0)*(1-a),0,7); ctx.stroke(); }
+    else if(f.type==='slash'){ ctx.globalAlpha=a; ctx.strokeStyle=f.color; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(f.x-22,f.y-22); ctx.lineTo(f.x+22,f.y+22); ctx.stroke(); }
+    else if(f.type==='num'){ ctx.globalAlpha=a; ctx.fillStyle=f.color; ctx.font='bold 17px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(f.val,f.x,f.y); }
+    else { ctx.globalAlpha=a; ctx.fillStyle=f.color; ctx.fillRect(f.x-f.size/2,f.y-f.size/2,f.size,f.size); } }
+  ctx.globalAlpha=1; ctx.textAlign='left';
+}
+function renderBattle(){ const B=state.battle; drawGrid();
+  if(B.phase==='action'){
+    // custom gauge + queue + buster
+    const gw=cv.width-220, gx=110; ctx.fillStyle='#1b1f29'; ctx.fillRect(gx,10,gw,12); ctx.fillStyle=B.customGauge>=1?'#ffd34d':'#3C7DC4'; ctx.fillRect(gx,10,gw*B.customGauge,12);
+    ctx.fillStyle='#cfd4e0'; ctx.font='10px ui-monospace,monospace'; ctx.textAlign='left'; ctx.fillText(B.customGauge>=1?'CUSTOM READY — Load (F/Ⓨ)':'Custom gauge…',gx,32);
+    ctx.fillStyle='#7c8396'; ctx.fillText(`deck ${folder.length} · draw ${C.handSize} → pick ${C.selectCap}`,gx,46);
+    // queued chips bottom-left
+    ctx.textAlign='center'; B.queue.forEach((k,i)=>{ const x=20+i*86,y=cv.height-40,c=CHIPS[k]; ctx.fillStyle='#1b1f29'; ctx.fillRect(x,y,80,30); ctx.strokeStyle=c.col; ctx.lineWidth=2; ctx.strokeRect(x,y,80,30); ctx.fillStyle=c.col; ctx.font='11px ui-monospace,monospace'; ctx.fillText(c.name,x+40,y+15); ctx.fillStyle='#7c8396'; ctx.font='8px ui-monospace,monospace'; ctx.fillText(i===0?'next ▶ Enter/Ⓐ':'',x+40,y+25); });
+    if(!B.queue.length){ ctx.fillStyle='#7c8396'; ctx.font='11px ui-monospace,monospace'; ctx.fillText('queue empty — Buster (Space/Ⓧ) or Load chips (F/Ⓨ)',cv.width/2,cv.height-24); }
+    ctx.textAlign='left';
+  } else { renderCustomScreen(); }
+}
+function renderCustomScreen(){ const B=state.battle;
+  ctx.fillStyle='rgba(8,10,15,0.55)'; ctx.fillRect(0,0,cv.width,gridOy()+GH*C.BCELL+4);   // dim the frozen board a touch
+  ctx.fillStyle='#6fc4e0'; ctx.font='bold 15px ui-monospace,monospace'; ctx.textAlign='left'; ctx.fillText(`◆ CUSTOM — pick up to ${C.selectCap} chips  (${B.sel.length}/${C.selectCap})`,16,20);
+  // clickable FIGHT / OK button (top-right)
+  const okw=150,okh=30,okx=cv.width-okw-12,oky=8; B.okRect={x:okx,y:oky,w:okw,h:okh};
+  const hov=mouseC.x>=okx&&mouseC.x<=okx+okw&&mouseC.y>=oky&&mouseC.y<=oky+okh;
+  ctx.fillStyle=hov?'#3f7bff':'#2d6df6'; ctx.fillRect(okx,oky,okw,okh); ctx.fillStyle='#fff'; ctx.font='bold 13px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('▶ FIGHT  (F/Ⓨ)',okx+okw/2,oky+20);
+  const n=B.drawn.length, cw=140, gap=8, total=n*(cw+gap)-gap, sx=(cv.width-total)/2, cy=cv.height-148;
+  B.cardRects=B.drawn.map((key,i)=>({x:sx+i*(cw+gap),y:cy,w:cw,h:132,i}));
+  B.drawn.forEach((key,i)=>{ const x=sx+i*(cw+gap), c=CHIPS[key], selIdx=B.sel.indexOf(i), isCur=i===B.cursor;
+    ctx.fillStyle=selIdx>=0?'#1e2740':'#13161e'; ctx.fillRect(x,cy,cw,132); ctx.strokeStyle=isCur?'#fff':(selIdx>=0?c.col:'#2a2f3d'); ctx.lineWidth=isCur?3:2; ctx.strokeRect(x,cy,cw,132);
+    ctx.fillStyle=c.col; ctx.font='bold 13px ui-monospace,monospace'; ctx.textAlign='left'; ctx.fillText(c.name,x+10,cy+20);
+    if(c.dmg){ ctx.fillStyle='#dfe4ee'; ctx.font='11px ui-monospace,monospace'; ctx.fillText(c.dmg+' dmg',x+10,cy+36); }
+    drawMini(x+10,cy+44,key,B.player.row);
+    ctx.fillStyle='#9aa3b7'; ctx.font='9px ui-monospace,monospace'; wrap(c.desc,x+10,cy+108,cw-18,11);
+    if(selIdx>=0){ ctx.fillStyle=c.col; ctx.font='bold 12px ui-monospace,monospace'; ctx.textAlign='right'; ctx.fillText('#'+(selIdx+1),x+cw-8,cy+20); } });
+  ctx.fillStyle='#cfd4e0'; ctx.font='11px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('◀ ▶ / A D  move   ·   Space / Ⓧ  select   ·   F / Ⓨ  OK & fight',cv.width/2,cv.height-8);
+  ctx.textAlign='left';
+}
+function wrap(text,x,y,maxw,lh){ const words=text.split(' '); let line='',yy=y; for(const w of words){ const t=line+w+' '; if(ctx.measureText(t).width>maxw&&line){ ctx.fillText(line,x,yy); line=w+' '; yy+=lh; } else line=t; } ctx.fillText(line,x,yy); }
+
+// ===== HUD / loop =======================================================
+function syncGuide(){ const face={0:[],1:[],2:[],3:[]}, L={buster:'Buster',use:'Use',chip:'Load/OK',select:'Pick'};
+  for(const a of ['buster','use','chip','select']){ const bi=binds[a]; if(face[bi]) face[bi].push(L[a]); }
+  document.getElementById('g-y').textContent=face[3].join('/')||'—'; document.getElementById('g-x').textContent=face[2].join('/')||'—';
+  document.getElementById('g-b').textContent=face[1].join('/')||'—'; document.getElementById('g-a').textContent=face[0].join('/')||'—'; }
+function syncHud(){ document.getElementById('c-hp').textContent=Math.max(0,Math.round(state.player.hp)); document.getElementById('c-prog').textContent=state.runProgress; document.getElementById('c-folder').textContent=folder.length+'/'+collection.length; }
+function frame(ts){ const dt=Math.min(0.04,(ts-last)/1000)||0; last=ts; perf+=dt; pollPad();
+  if(hitStop>0){ hitStop=Math.max(0,hitStop-dt); render(); requestAnimationFrame(frame); return; }   // impact freeze-frame
+  if(!state.over&&!introOpen&&!controlsOpen){ if(mode==='overworld') stepOverworld(dt); else if(mode==='battle') stepBattle(dt); }
+  stepFx(dt); render(); requestAnimationFrame(frame);
+}
+newRun(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -13,6 +13,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import * as sfx from '../sfx.js';
+import * as musicMgr from '../audio/music.js';
+import { bandForDepth } from '../audio/manifest.js';
 import { Cutscene, OPENING_SCENES, RingVignette, HoldfastVignette, EventVignette, WaysideScene } from './Cutscene.jsx';
 import { WARDS, wardBlocking, activateWard, advanceWardDeeds } from '../data/wards.js';
 import { KEYSTONE_TIERS, shardYield, resolveCraft } from '../data/keystones.js';
@@ -41,6 +43,9 @@ import {
   HUNTING_GROUNDS, D_HP, D_ATK, crossMult, foe, wavesForGround,
   ringLawFor, applyRingLaw, ringLawMods, LAW_RECIPE,
 } from '../engine/waves.js';
+// Ring backdrop themes (vF-CA feel pass). Importing this also revives the §28 cosmetic
+// theme system (themeSystem.js → themes.js), which was on disk but unwired.
+import { ringTheme } from '../engine/themeSystem.js';
 // Read-only imports for the combat legibility cues (manual-verb audit §5): the
 // doctrine walk that predicts an enemy's next move, and the dials the cues quote.
 import { applyTemperament } from '../engine/combat/doctrines.js';
@@ -1029,6 +1034,11 @@ function saveMusic(on) { try { localStorage.setItem(MUSIC_KEY, on ? '1' : '0'); 
 const SFX_KEY = '8gents_seam_sfx'; // combat/UI sound effects on/off (music has its own toggle)
 function loadSfxOn() { try { return localStorage.getItem(SFX_KEY) !== '0'; } catch { return true; } }
 function saveSfxOn(on) { try { localStorage.setItem(SFX_KEY, on ? '1' : '0'); } catch { /* best-effort */ } }
+// Independent 0–1 volume sliders for music and SFX (persisted).
+const MUSIC_VOL_KEY = '8gents_seam_music_vol';
+const SFX_VOL_KEY = '8gents_seam_sfx_vol';
+function loadVol(key, dflt) { try { const v = parseFloat(localStorage.getItem(key)); return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : dflt; } catch { return dflt; } }
+function saveVol(key, v) { try { localStorage.setItem(key, String(v)); } catch { /* best-effort */ } }
 // The opening cutscene plays once on a fresh save (no flag), then is re-watchable.
 const INTRO_KEY = '8gents_seam_intro';
 function introSeen() { try { return localStorage.getItem(INTRO_KEY) === '1'; } catch { return false; } }
@@ -2092,6 +2102,7 @@ function useFight(opts = {}) {
       const koMap = event.killed ? { [event.target.uid]: true } : {};
       setFx({ actor: null, cast: null, bursts: { [event.target.uid]: 'attack' }, killed: koMap, heavy: koMap, shake: event.killed ? 'big' : null, n: ++FX_NONCE });
       startHold(TICK_HOLD_MS);
+      sfx.dotTick();
     }
     const adds = [
       ...popupsForEvent(event).map((a) => ({ ...a, id: ++POP_ID })),
@@ -2279,6 +2290,30 @@ function CenterMoves({ moves, pendingSkill, phase, onSkill, onBack, tgtAllies, t
           <button onClick={onBack} style={{ width: '100%', background: 'transparent', border: `1px solid ${LINE}`, color: DIM, borderRadius: 8, padding: '5px 0', cursor: 'pointer', fontSize: T.micro, fontWeight: 800 }}>↩ Back</button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── RingBackdrop (vF-CA feel pass) — a pure-CSS atmospheric layer for the active ring. ──
+// Sits BEHIND a surface (absolute, inset 0, z-index 0, pointer-events none) so all existing
+// UI lays on top untouched — it never shifts layout. Three pure-CSS layers: the ring's theme
+// gradient, a soft radial vignette (dark edges, lighter center) to keep foreground reading,
+// and a faint Cinzel watermark of the ring's name, bottom-right. No images. Renders nothing
+// when the ring has no theme (e.g. sandbox / no active ring) — fail silently.
+//   dim — extra darkening overlay (loss screen passes a stronger scrim).
+function RingBackdrop({ ringId, dim = 0 }) {
+  const theme = ringTheme(ringId);
+  if (!theme) return null;
+  return (
+    <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden', borderRadius: 'inherit' }}>
+      {/* the ring's theme gradient — dark → slightly-less-dark, faintly Type-colored */}
+      <div style={{ position: 'absolute', inset: 0, background: theme.bgGradient }} />
+      {/* radial vignette: lighter center, dark edges, so foreground UI stays legible */}
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.18) 62%, rgba(0,0,0,0.5) 100%)' }} />
+      {/* optional extra scrim (loss screen) */}
+      {dim > 0 && <div style={{ position: 'absolute', inset: 0, background: `rgba(0,0,0,${dim})` }} />}
+      {/* faint ring-name watermark, bottom-right, Cinzel, ~10% opacity */}
+      <div style={{ position: 'absolute', right: 16, bottom: 12, fontFamily: FONTS.display, fontSize: 26, fontWeight: 700, letterSpacing: 1.5, color: theme.accentColor, opacity: 0.1, whiteSpace: 'nowrap', textAlign: 'right', maxWidth: '92%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{theme.label}</div>
     </div>
   );
 }
@@ -2862,9 +2897,13 @@ function RunMode({ narrow, slag = 0, onSlag }) {
   const [pendingElite, setPendingElite] = useState(null); // an ELITE node awaiting fight-or-flee (or null)
   const [eventOutcome, setEventOutcome] = useState(null); // the outcome line after a choice is made
   const eventsSeenRef = useRef([]); // event ids already shown THIS run — no repeats within a run
-  const [music, setMusic] = useState(loadMusic); // ambient pad on/off (user toggle, persisted)
+  const [music, setMusic] = useState(loadMusic); // background music on/off (user toggle, persisted)
   const [sfxOn, setSfxOn] = useState(loadSfxOn); // combat/UI SFX on/off (persisted; music is separate)
+  const [musicVol, setMusicVol] = useState(() => loadVol(MUSIC_VOL_KEY, 0.7)); // 0–1 music level
+  const [sfxVol, setSfxVol] = useState(() => loadVol(SFX_VOL_KEY, 1));         // 0–1 SFX level
   useEffect(() => { sfx.setMuted(!sfxOn); }, [sfxOn]); // keep the sound module in sync
+  useEffect(() => { sfx.setVolume(sfxVol); }, [sfxVol]);
+  useEffect(() => { musicMgr.setMusicVolume(musicVol); }, [musicVol]);
   const [showIntro, setShowIntro] = useState(() => !introSeen()); // opening cutscene (first launch + replay)
   const [relics, setRelics] = useState(loadRelics);        // owned relic ids (the collection — found from boss clears)
   const [relicKit, setRelicKit] = useState(loadRelicKit);  // equipped relic loadout (subset, capped at RELIC_SLOTS)
@@ -2882,9 +2921,20 @@ function RunMode({ narrow, slag = 0, onSlag }) {
   const [homeTab, setHomeTab] = useState('raid');          // home shell page: raid | forge | relics | holdfast
   const [showSettings, setShowSettings] = useState(false); // ⚙ settings menu overlay (music/auto-pick/beta/reset)
   const [confirmReset, setConfirmReset] = useState(false); // two-tap guard on the tester "Start Over" wipe
-  // Ambient pad follows the toggle; stays silent until a user gesture resumes audio, and
-  // fades out when the SEAM closes. Combat/UI sfx are unaffected by this.
-  useEffect(() => { if (music) sfx.startAmbient(); else sfx.stopAmbient(); return () => sfx.stopAmbient(); }, [music]);
+  // Music follows the climb: title on the home shell, a ring's exploration bed while you're
+  // in it, the boss track on the final wave. Stays silent until a user gesture unlocks audio
+  // (handled inside music.js), and is independent of the combat/UI SFX toggle. When an
+  // authored track file is missing, music.js falls back to the procedural ambient pad.
+  useEffect(() => {
+    if (!music) { musicMgr.stopMusic(); return; }
+    if (runPhase === 'drop') { musicMgr.stopMusic(); return; } // the finale sting carries the ending
+    let track;
+    if (runPhase === 'pick') track = 'title';
+    else if (runPhase === 'fighting') track = (waveIdx === WAVE_COUNT - 1) ? 'boss' : bandForDepth(runDepth);
+    else track = bandForDepth(runDepth); // upgrade / event / won / lost / challenge — hold the ring's bed
+    musicMgr.playMusic(track);
+  }, [music, runPhase, waveIdx, runDepth]);
+  useEffect(() => () => musicMgr.stopMusic(), []); // fade music out when the SEAM unmounts
   // Surface where the player is so the feedback button can attach it to a report.
   useEffect(() => {
     setLiveContext({ screen: runPhase === 'pick' ? `home:${homeTab}` : runPhase, phase: runPhase, squad: squad.map((m) => m.id) });
@@ -4028,7 +4078,7 @@ function RunMode({ narrow, slag = 0, onSlag }) {
       <div style={{ paddingBottom: 84 }}>
         {/* ── Top utility bar: page title + NG+ pill + ⚙ settings ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-          <span style={{ fontSize: T.sub, fontWeight: 900, color: '#eaf2ff', letterSpacing: 0.5 }}>{tabTitle}</span>
+          <span style={{ fontFamily: FONTS.serif, fontSize: T.head, fontWeight: 700, color: BASE.ink, letterSpacing: 0.5 }}>{tabTitle}</span>
           {crossing > 0 && (
             <span title={`The Deep Crossing — every ring +${Math.round((crossMult(crossing) - 1) * 100)}% stronger`}
               style={{ fontSize: T.micro, fontWeight: 900, color: '#cba6ff', background: '#1a0f2a', border: '1px solid #6a4a9a', borderRadius: 999, padding: '3px 9px' }}>
@@ -4323,7 +4373,7 @@ function RunMode({ narrow, slag = 0, onSlag }) {
                           style={{ flex: 1, textAlign: 'center', borderRadius: 12, padding: '12px 8px', cursor: 'pointer',
                             background: on ? 'radial-gradient(120% 100% at 50% 0%, #1a1430, #0c0a14)' : PANEL, border: `1.5px solid ${on ? '#7a5aa0' : LINE}` }}>
                           <div style={{ fontSize: 22, lineHeight: 1 }}>{b.id === 'deep' ? '✦' : b.id === 'near' ? '🧭' : '✨'}</div>
-                          <div style={{ fontSize: T.small, fontWeight: 900, color: on ? '#eadcff' : '#9a9aaa', marginTop: 3 }}>{b.name}</div>
+                          <div style={{ fontFamily: FONTS.serif, fontSize: T.small, fontWeight: 700, color: on ? '#eadcff' : '#9a9aaa', marginTop: 3 }}>{b.name}</div>
                           <div style={{ fontSize: 9, color: on ? '#9a7fc0' : DIM, marginTop: 2, lineHeight: 1.35 }}>{b.blurb}</div>
                         </button>
                       ); })}
@@ -4422,10 +4472,10 @@ function RunMode({ narrow, slag = 0, onSlag }) {
 
         {/* ═══════════════ FORGE — spend banked slag on a permanent edge ═══════════════ */}
         {homeTab === 'forge' && (<>
-          <div style={{ background: '#0c1016', border: `1px solid ${LINE}`, borderRadius: 12, padding: '12px 14px' }}>
+          <div style={{ background: 'linear-gradient(180deg,#1C150D,#120D08)', border: `1px solid ${LINE}`, borderTop: '2px solid #cdb6ff', borderRadius: 12, padding: '12px 14px', boxShadow: 'inset 0 0 30px -20px #cdb6ff' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <div style={{ fontSize: T.sub, color: '#cdb6ff', fontWeight: 900, letterSpacing: 0.5 }}>⚒ THE FORGE</div>
-              <div style={{ fontSize: T.small, fontWeight: 800, color: '#c9c98a' }}>⚒ {slag} slag</div>
+              <div style={{ fontFamily: FONTS.serif, fontSize: T.sub, color: '#cdb6ff', fontWeight: 700, letterSpacing: 0.5 }}>⚒ THE FORGE</div>
+              <div style={{ fontFamily: FONTS.mono, fontSize: T.small, fontWeight: 700, color: BASE.gold }}>⚒ {slag} slag</div>
             </div>
             <div style={{ fontSize: T.micro, color: DIM, marginBottom: 10, lineHeight: 1.4 }}>Slag you bank from runs buys a <b style={{ color: '#cdb6ff' }}>permanent</b> edge — it carries into every run from here on. This is what a run leaves behind.</div>
             <div style={{ display: 'grid', gridTemplateColumns: narrow ? '1fr 1fr' : '1fr 1fr 1fr', gap: 8 }}>
@@ -4438,8 +4488,8 @@ function RunMode({ narrow, slag = 0, onSlag }) {
                       background: have ? '#10231a' : PANEL, border: `1.5px solid ${have ? WIN : afford ? `${p.color}99` : LINE}`, opacity: !have && !afford ? 0.5 : 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
                       <span style={{ fontSize: T.body }}>{p.icon}</span>
-                      <span style={{ fontSize: T.small, fontWeight: 900, color: have ? WIN : p.color }}>{p.name}</span>
-                      <span style={{ marginLeft: 'auto', fontSize: T.micro, fontWeight: 800, color: have ? WIN : afford ? '#c9c98a' : DIM }}>{have ? '✓ OWNED' : `${p.cost} ⚒`}</span>
+                      <span style={{ fontFamily: FONTS.serif, fontSize: T.small, fontWeight: 700, color: have ? WIN : p.color }}>{p.name}</span>
+                      <span style={{ marginLeft: 'auto', fontFamily: have ? FONTS.sans : FONTS.mono, fontSize: T.micro, fontWeight: 800, color: have ? WIN : afford ? BASE.gold : DIM }}>{have ? '✓ OWNED' : `${p.cost} ⚒`}</span>
                     </div>
                     <div style={{ fontSize: T.micro, color: have ? '#bfe8cf' : '#9a9aaa', lineHeight: 1.35 }}>{p.desc}</div>
                   </button>
@@ -4458,9 +4508,9 @@ function RunMode({ narrow, slag = 0, onSlag }) {
               const nt = temperingTier + 1; setTemperingTier(nt); saveTempering(nt);
             };
             return (
-              <div style={{ background: '#0c1016', border: `1px solid ${LINE}`, borderRadius: 12, padding: '12px 14px', marginTop: 14 }}>
+              <div style={{ background: 'linear-gradient(180deg,#1C150D,#120D08)', border: `1px solid ${LINE}`, borderTop: '2px solid #c9c98a', borderRadius: 12, padding: '12px 14px', marginTop: 14, boxShadow: 'inset 0 0 30px -20px #c9c98a' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <div style={{ fontSize: T.sub, color: '#c9c98a', fontWeight: 900, letterSpacing: 0.5 }}>🔩 FORGE TEMPERING</div>
+                  <div style={{ fontFamily: FONTS.serif, fontSize: T.sub, color: '#c9c98a', fontWeight: 700, letterSpacing: 0.5 }}>🔩 FORGE TEMPERING</div>
                   <div style={{ fontSize: T.micro, fontWeight: 800, color: '#9a9a5a' }}>T{temperingTier}/{TEMPERING_CAP} · +{temperingTier}% max HP</div>
                 </div>
                 <div style={{ fontSize: T.micro, color: DIM, lineHeight: 1.4, marginBottom: 10 }}>
@@ -4484,10 +4534,10 @@ function RunMode({ narrow, slag = 0, onSlag }) {
             const ownedK = KEYSTONE_IDS.filter((id) => relics.includes(id));
             const allK = ownedK.length >= KEYSTONE_IDS.length;
             return (
-              <div style={{ background: 'radial-gradient(120% 100% at 50% 0%, #0e211e, #0a1014)', border: '1px solid #2a6a5a', borderRadius: 12, padding: '12px 14px', marginTop: 14 }}>
+              <div className="rw-panel-forged" style={{ padding: '13px 15px', marginTop: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <div style={{ fontSize: T.sub, color: '#5ff0d0', fontWeight: 900, letterSpacing: 0.5 }}>✦ FORGE A KEYSTONE</div>
-                  <div style={{ fontSize: T.small, fontWeight: 800, color: '#5ff0d0' }}>⛏ {shards} · ⚒ {slag}</div>
+                  <div style={{ fontFamily: FONTS.serif, fontSize: T.sub, color: '#9be7ff', fontWeight: 700, letterSpacing: 0.5, textShadow: '0 0 14px #9be7ff66' }}>✦ FORGE A KEYSTONE</div>
+                  <div style={{ fontFamily: FONTS.mono, fontSize: T.small, fontWeight: 700, color: '#5ff0d0' }}>⛏ {shards} · ⚒ {slag}</div>
                 </div>
                 <div style={{ fontSize: T.micro, color: DIM, marginBottom: 10, lineHeight: 1.4 }}>The top relic tier isn't found — it's <b style={{ color: '#5ff0d0' }}>forged</b>. Salvage relics into <b style={{ color: '#5ff0d0' }}>shards</b> (Relics tab), then gamble them here. Hotter heat, better odds. A failed pour gives back <b>half</b> the shards. <span style={{ color: '#8aa' }}>{ownedK.length}/{KEYSTONE_IDS.length} keystones forged.</span></div>
                 {allK ? (
@@ -4496,12 +4546,17 @@ function RunMode({ narrow, slag = 0, onSlag }) {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                     {KEYSTONE_TIERS.map((t) => {
                       const afford = shards >= t.shards && slag >= t.slag;
+                      const pct = Math.round(t.odds * 100);
                       return (
                         <button key={t.id} onClick={() => afford && craftKeystone(t)} disabled={!afford}
-                          style={{ textAlign: 'center', borderRadius: 10, padding: '11px 6px', cursor: afford ? 'pointer' : 'default', background: afford ? '#0e2420' : PANEL, border: `1.5px solid ${afford ? '#2a6a5a' : LINE}`, opacity: afford ? 1 : 0.5 }}>
-                          <div style={{ fontSize: T.small, fontWeight: 900, color: afford ? '#eafff8' : DIM }}>{t.name}</div>
-                          <div style={{ fontSize: T.sub, fontWeight: 900, color: afford ? '#5ff0d0' : DIM, margin: '2px 0' }}>{Math.round(t.odds * 100)}%</div>
-                          <div style={{ fontSize: T.micro, color: afford ? '#c9c98a' : DIM }}>⛏ {t.shards} · ⚒ {t.slag}</div>
+                          style={{ textAlign: 'center', borderRadius: 10, padding: '11px 7px', cursor: afford ? 'pointer' : 'default', background: afford ? 'linear-gradient(180deg,#1a1208,#120d08)' : PANEL, border: `1.5px solid ${afford ? '#7a5a2a' : LINE}`, boxShadow: afford ? 'inset 0 0 24px -14px #E8A040, 0 0 14px -8px #9be7ff' : 'none', opacity: afford ? 1 : 0.5 }}>
+                          <div style={{ fontFamily: FONTS.serif, fontSize: T.small, fontWeight: 700, color: afford ? '#f3e8d4' : DIM }}>{t.name}</div>
+                          <div style={{ fontFamily: FONTS.mono, fontSize: T.head, fontWeight: 700, color: afford ? '#9be7ff' : DIM, margin: '3px 0 5px', textShadow: afford ? '0 0 12px #9be7ff55' : 'none' }}>{pct}%</div>
+                          {/* heat bar — hotter pour, better odds */}
+                          <div style={{ height: 5, borderRadius: 3, background: '#000', overflow: 'hidden', marginBottom: 6, border: '1px solid #2c2418' }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: 'linear-gradient(90deg,#7a2a0c,#E8A040,#9be7ff)', boxShadow: afford ? '0 0 8px #E8A040' : 'none' }} />
+                          </div>
+                          <div style={{ fontFamily: FONTS.mono, fontSize: T.micro, fontWeight: 700, color: afford ? BASE.gold : DIM }}>⛏ {t.shards} · ⚒ {t.slag}</div>
                         </button>
                       );
                     })}
@@ -4528,9 +4583,9 @@ function RunMode({ narrow, slag = 0, onSlag }) {
 
         {/* ═══════════════ RELICS — found loot, equip a kit ═══════════════ */}
         {homeTab === 'relics' && (
-          <div style={{ background: '#0c0e16', border: `1px solid ${LINE}`, borderRadius: 12, padding: '12px 14px' }}>
+          <div style={{ background: 'linear-gradient(180deg,#1C150D,#120D08)', border: `1px solid ${LINE}`, borderTop: '2px solid #cba6ff', borderRadius: 12, padding: '12px 14px', boxShadow: 'inset 0 0 30px -20px #cba6ff' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <div style={{ fontSize: T.sub, color: '#cba6ff', fontWeight: 900, letterSpacing: 0.5 }}>✦ RELICS</div>
+              <div style={{ fontFamily: FONTS.serif, fontSize: T.sub, color: '#cba6ff', fontWeight: 700, letterSpacing: 0.5 }}>✦ RELICS</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: T.micro, fontWeight: 800, color: '#c9c98a' }}>⚒ {slag}</span>
                 <span style={{ fontSize: T.micro, fontWeight: 800, color: shards > 0 ? '#5ff0d0' : DIM }}>⛏ {shards}</span>
@@ -4856,20 +4911,29 @@ function RunMode({ narrow, slag = 0, onSlag }) {
                 <span style={{ fontSize: T.sub, fontWeight: 900, color: '#eaf2ff', letterSpacing: 0.5 }}>⚙ Settings</span>
                 <button onClick={() => { setShowSettings(false); setConfirmReset(false); }} style={{ marginLeft: 'auto', fontSize: T.body, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, cursor: 'pointer', border: `1px solid ${LINE}`, background: PANEL, color: DIM }}>✕</button>
               </div>
-              {/* Music toggle */}
+              {/* Music toggle + volume */}
               <button onClick={() => { sfx.resume(); const m = !music; setMusic(m); saveMusic(m); }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 10, marginBottom: 8, cursor: 'pointer', textAlign: 'left',
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 10, marginBottom: music ? 0 : 8, cursor: 'pointer', textAlign: 'left',
                   border: `1px solid ${music ? '#4a3a66' : LINE}`, background: music ? '#160f1d' : PANEL }}>
                 <span style={{ fontSize: T.sub }}>{music ? '🔊' : '🔇'}</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: T.small, fontWeight: 800, color: music ? '#cba6ff' : '#bbb' }}>Ambient Music</div>
-                  <div style={{ fontSize: T.micro, color: DIM }}>A low pad under the climb.</div>
+                  <div style={{ fontSize: T.small, fontWeight: 800, color: music ? '#cba6ff' : '#bbb' }}>Music</div>
+                  <div style={{ fontSize: T.micro, color: DIM }}>The score under the climb — shifts by ring and boss.</div>
                 </div>
                 <span style={{ fontSize: T.micro, fontWeight: 900, color: music ? '#9be7ff' : '#777' }}>{music ? 'ON' : 'OFF'}</span>
               </button>
-              {/* Sound-effects toggle (separate from music) */}
+              {music && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px 12px', marginBottom: 8, border: `1px solid #4a3a66`, borderTop: 'none', borderRadius: '0 0 10px 10px', background: '#160f1d' }}>
+                  <span style={{ fontSize: T.micro }}>🔈</span>
+                  <input type="range" min="0" max="1" step="0.05" value={musicVol}
+                    onChange={(e) => { const v = parseFloat(e.target.value); setMusicVol(v); saveVol(MUSIC_VOL_KEY, v); }}
+                    style={{ flex: 1, accentColor: '#cba6ff', cursor: 'pointer' }} />
+                  <span style={{ fontSize: T.micro, fontWeight: 900, color: '#9be7ff', width: 34, textAlign: 'right' }}>{Math.round(musicVol * 100)}%</span>
+                </div>
+              )}
+              {/* Sound-effects toggle + volume (separate from music) */}
               <button onClick={() => { const s = !sfxOn; setSfxOn(s); saveSfxOn(s); if (s) { sfx.resume(); sfx.upgradePick(); } }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 10, marginBottom: 8, cursor: 'pointer', textAlign: 'left',
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 10, marginBottom: sfxOn ? 0 : 8, cursor: 'pointer', textAlign: 'left',
                   border: `1px solid ${sfxOn ? '#4a3a66' : LINE}`, background: sfxOn ? '#160f1d' : PANEL }}>
                 <span style={{ fontSize: T.sub }}>{sfxOn ? '🔔' : '🔕'}</span>
                 <div style={{ flex: 1 }}>
@@ -4878,6 +4942,16 @@ function RunMode({ narrow, slag = 0, onSlag }) {
                 </div>
                 <span style={{ fontSize: T.micro, fontWeight: 900, color: sfxOn ? '#9be7ff' : '#777' }}>{sfxOn ? 'ON' : 'OFF'}</span>
               </button>
+              {sfxOn && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px 12px', marginBottom: 8, border: `1px solid #4a3a66`, borderTop: 'none', borderRadius: '0 0 10px 10px', background: '#160f1d' }}>
+                  <span style={{ fontSize: T.micro }}>🔈</span>
+                  <input type="range" min="0" max="1" step="0.05" value={sfxVol}
+                    onChange={(e) => { const v = parseFloat(e.target.value); setSfxVol(v); saveVol(SFX_VOL_KEY, v); }}
+                    onMouseUp={() => { sfx.resume(); sfx.upgradePick(); }}
+                    style={{ flex: 1, accentColor: '#cba6ff', cursor: 'pointer' }} />
+                  <span style={{ fontSize: T.micro, fontWeight: 900, color: '#9be7ff', width: 34, textAlign: 'right' }}>{Math.round(sfxVol * 100)}%</span>
+                </div>
+              )}
               {/* Auto-pick toggle */}
               <button onClick={() => setAutoPick(!autoPick)}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 10, marginBottom: 8, cursor: 'pointer', textAlign: 'left',
@@ -5161,6 +5235,9 @@ function RunMode({ narrow, slag = 0, onSlag }) {
       <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 16, padding: narrow ? '15px 12px' : '20px 18px',
         background: draftArt ? `linear-gradient(180deg, rgba(10,11,18,0.9) 0%, rgba(9,10,16,0.95) 58%, rgba(8,9,14,0.97) 100%), url(${draftArt}) center/cover no-repeat` : 'transparent',
         boxShadow: draftArt ? 'inset 0 0 90px rgba(0,0,0,0.62)' : 'none' }}>
+        {/* vF-CA: ring theme behind the card choices */}
+        <RingBackdrop ringId={enteredRing?.id} />
+        <div style={{ position: 'relative', zIndex: 1 }}>
         {/* THE THRESHOLD (vF-Z): stepping into a ring is a story beat, not a menu. */}
         {waveIdx === 0 && enteredRing && RING_INTRO[enteredRing.id] && (() => {
           const di = diffOf(enteredRing.depth + crossing);
@@ -5236,6 +5313,7 @@ function RunMode({ narrow, slag = 0, onSlag }) {
           style={{ width: '100%', marginTop: 14, padding: '14px 0', borderRadius: 12, border: 'none', background: upgradeChoice ? ACCENT : '#222', color: upgradeChoice ? '#1a1408' : '#555', fontSize: T.sub, fontWeight: 900, letterSpacing: 0.5, cursor: upgradeChoice ? 'pointer' : 'default' }}>
           {upgradeChoice ? ((UPGRADE_BY_ID[upgradeChoice].scope !== 'unit') ? `CONFIRM ${UPGRADE_BY_ID[upgradeChoice].name} → ${nextWave.name}` : `CONFIRM — choose who gets ${UPGRADE_BY_ID[upgradeChoice].name} →`) : 'TAP AN UPGRADE ABOVE'}
         </button>
+        </div>
       </div>
     );
   }
@@ -5396,6 +5474,9 @@ function RunMode({ narrow, slag = 0, onSlag }) {
             ? `linear-gradient(180deg, rgba(8,16,8,0.72) 0%, rgba(8,13,10,0.9) 55%, rgba(7,10,9,0.96) 100%), url(${ringArt}) center/cover no-repeat`
             : 'radial-gradient(ellipse at top, #132413 0%, #0a0e0a 72%)',
           boxShadow: `inset 0 0 110px rgba(0,0,0,0.55), 0 0 28px ${WIN}22`, minHeight: 320 }}>
+          {/* vF-CA: the cleared ring's theme at full opacity behind the win moment */}
+          <RingBackdrop ringId={enteredRing?.id} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ fontSize: narrow ? 34 : 46, fontWeight: 900, color: '#eaffea', letterSpacing: 2, textShadow: `0 0 26px ${WIN}, 0 0 64px ${WIN}55, 0 2px 6px #000` }}>RING TAKEN</div>
           <div style={{ fontSize: T.body, color: '#dcf2cf', margin: '6px 0 14px', textShadow: '0 1px 5px #000' }}>{caughtFrom ? caughtFrom.name : 'The ring'}, cleared to its heart.</div>
 
@@ -5411,14 +5492,11 @@ function RunMode({ narrow, slag = 0, onSlag }) {
           </>}
 
           {step === 'beat' && enteredRing && RING_CLEAR[enteredRing.id] && (
-            <div style={calm}>
-              <div style={{ display: 'flex', gap: 13, alignItems: 'flex-start' }}>
-                <RingVignette depth={enteredRing.depth} size={narrow ? 64 : 82} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: T.micro, fontWeight: 900, letterSpacing: 1.5, color: '#9ad0a0' }}>✦ {RING_CLEAR[enteredRing.id].boss.toUpperCase()} FALLS</div>
-                  <div style={{ fontSize: T.small, color: '#cbd8cb', lineHeight: 1.6, fontStyle: 'italic', marginTop: 5 }}>{RING_CLEAR[enteredRing.id].beat}</div>
-                </div>
-              </div>
+            // vF-CA: the ring-clear beat on a parchment card — Grenze serif, centered, the
+            // mentor's voice reading like a page from his trail rather than a UI panel.
+            <div style={{ background: 'linear-gradient(180deg, #efe6d6 0%, #e4d8c2 100%)', border: '1px solid #c9b896', borderRadius: 12, padding: narrow ? '16px 16px' : '20px 24px', margin: '12px 0', textAlign: 'center', boxShadow: 'inset 0 0 30px rgba(120,96,54,0.22), 0 2px 10px rgba(0,0,0,0.4)' }}>
+              <div style={{ fontFamily: FONTS.serif, fontSize: T.micro, fontWeight: 900, letterSpacing: 2, color: '#7a5a2a' }}>✦ {RING_CLEAR[enteredRing.id].boss.toUpperCase()} FALLS</div>
+              <div style={{ fontFamily: FONTS.serif, fontSize: T.body, color: '#3a2c18', lineHeight: 1.7, fontStyle: 'italic', marginTop: 8 }}>{RING_CLEAR[enteredRing.id].beat}</div>
             </div>
           )}
 
@@ -5632,6 +5710,7 @@ function RunMode({ narrow, slag = 0, onSlag }) {
           {last && (
             <button onClick={newRun} style={{ width: '100%', marginTop: 10, padding: '13px 0', border: 'none', borderRadius: 10, background: ACCENT, color: '#1a1408', fontSize: T.body, fontWeight: 900, letterSpacing: 1, cursor: 'pointer' }}>NEW RUN →</button>
           )}
+          </div>
         </div>
       );
     }
@@ -5642,6 +5721,9 @@ function RunMode({ narrow, slag = 0, onSlag }) {
           ? `linear-gradient(180deg, rgba(14,6,6,0.82) 0%, rgba(10,6,7,0.93) 60%, rgba(8,5,6,0.97) 100%), url(${lostArt}) center/cover no-repeat`
           : 'radial-gradient(ellipse at top, #241313 0%, #0c0808 72%)',
         boxShadow: `inset 0 0 120px rgba(0,0,0,0.7), 0 0 26px ${LOSS}22`, filter: 'saturate(0.78)' }}>
+        {/* vF-CA: the ring's theme behind the loss, dimmed further — the place wins. */}
+        <RingBackdrop ringId={enteredRing?.id} dim={0.4} />
+        <div style={{ position: 'relative', zIndex: 1 }}>
         <div style={{ fontSize: narrow ? 34 : 46, fontWeight: 900, color: '#ffd7d7', letterSpacing: 2, textShadow: `0 0 24px ${LOSS}, 0 0 60px ${LOSS}44, 0 2px 6px #000` }}>SQUAD DOWN</div>
         <div style={{ fontSize: T.body, color: '#d8b8b8', margin: '6px 0 16px', textShadow: '0 1px 5px #000' }}>Fell at {wave.boss ? '💀 ' : ''}{wave.name} — wave {waveIdx + 1}/{WAVE_COUNT}.</div>
         {featCelebration}
@@ -5654,6 +5736,7 @@ function RunMode({ narrow, slag = 0, onSlag }) {
         </button>
         {resultDetails && <RunRecap taken={taken} stats={stats} squad={squad} />}
         <button onClick={newRun} style={{ width: '100%', marginTop: 8, padding: '13px 0', border: 'none', borderRadius: 10, background: ACCENT, color: '#1a1408', fontSize: T.body, fontWeight: 900, letterSpacing: 1, cursor: 'pointer' }}>NEW RUN →</button>
+        </div>
       </div>
     ); }
     return null;
@@ -5665,7 +5748,11 @@ function RunMode({ narrow, slag = 0, onSlag }) {
   // and drop the now-redundant wave header. The frozen board + log stay below to review.
   const resultTop = ['won', 'lost', 'challenge-won', 'challenge-lost'].includes(runPhase);
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
+      {/* vF-CA: the active ring's theme behind the whole combat surface (arena keeps its
+          own art on top). Null ring (sandbox) → no backdrop. */}
+      <RingBackdrop ringId={enteredRing?.id} />
+      <div style={{ position: 'relative', zIndex: 1 }}>
       {resultTop && <div style={{ marginBottom: 12 }}>{banner}</div>}
       {!resultTop && <>
       <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
@@ -5689,6 +5776,7 @@ function RunMode({ narrow, slag = 0, onSlag }) {
       <BuildStrip taken={taken} />
       <FightView fight={fight} narrow={narrow} banner={resultTop ? null : banner} bossUid={wave.boss ? 'B0' : null}
         auto={runAuto} onToggleAuto={frontierRun ? null : (n) => { setAuto(n); fight.setLiveAuto(n); }} bgImg={enteredRing?.img} />
+      </div>
     </div>
   );
 }
@@ -5845,7 +5933,7 @@ export function SeamLab({ slag = 0, onSlag, version }) {
       <div style={{ maxWidth: 920, margin: '0 auto', padding: narrow ? '14px 12px 48px' : '18px 18px 56px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: T.head, fontWeight: 900, color: '#e86040', letterSpacing: 2 }}>RINGWARD</div>
+            <div style={{ fontFamily: FONTS.display, fontSize: T.huge, fontWeight: 700, color: BASE.gold, letterSpacing: 2, textShadow: '0 2px 0 #2a1206, 0 5px 22px rgba(0,0,0,0.6)' }}>RINGWARD</div>
             <div style={{ fontSize: T.small, color: DIM, marginTop: 2 }}>Manual combat · charge, spend, build.</div>
           </div>
           {/* Version shown as a fixed corner badge (above) so it survives battle scroll.

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Field Proto — 8×4 turn-based</title>
+<style>
+  :root { --tile: 72px; }
+  * { box-sizing: border-box; }
+  body { background: #0e0e1a; color: #cdd3e0; font-family: ui-monospace, monospace; margin: 0; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  h1 { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: #7ecfff; margin: 0; font-weight: 600; }
+  .sub { font-size: 11px; color: #6a7088; margin-top: -10px; }
+  .wrap { display: flex; gap: 24px; align-items: flex-start; }
+  /* board */
+  #board { position: relative; width: calc(var(--tile) * 8); height: calc(var(--tile) * 4); background: #07070f; border: 1px solid #23263e; }
+  .tile { position: absolute; width: var(--tile); height: var(--tile); border: 1px solid #1a1c30; display: flex; align-items: flex-start; justify-content: flex-end; }
+  .tile.player { background: linear-gradient(#11203a, #0d1830); }
+  .tile.enemy  { background: linear-gradient(#241433, #190d26); }
+  .tile.claimed { background: linear-gradient(#143a3a, #0d2630); box-shadow: inset 0 0 0 1px #2f8f8f55; }
+  .tile.heat::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 60%, #ff7a1888, #ff3b0033 60%, transparent 75%); animation: flicker 0.5s infinite alternate; pointer-events: none; }
+  @keyframes flicker { from { opacity: 0.65; } to { opacity: 1; } }
+  .tile .heatnum { font-size: 9px; color: #ffd9a8; padding: 2px 4px; z-index: 3; text-shadow: 0 0 3px #000; }
+  .tile.reachable { cursor: pointer; box-shadow: inset 0 0 0 2px #7ecfff88; }
+  .tile.reachable:hover { box-shadow: inset 0 0 0 2px #7ecfff; background-color: #1a2c48; }
+  .midline { position: absolute; left: calc(var(--tile) * 4); top: 0; width: 2px; height: 100%; background: #3a3f60; z-index: 4; }
+  /* occupants */
+  .occ { position: absolute; width: var(--tile); height: var(--tile); transition: left .25s, top .25s; z-index: 5; pointer-events: none; display: flex; align-items: center; justify-content: center; }
+  #player-sprite { width: 96%; height: 96%; image-rendering: pixelated; object-fit: contain; filter: drop-shadow(0 4px 6px #000a); }
+  .husk { width: 66%; height: 66%; position: relative; }
+  .husk .core { position: absolute; inset: 0; background: conic-gradient(from 0deg, #b14bff, #6a18c9, #d24bff, #6a18c9, #b14bff); border-radius: 14% 60% 18% 55%; transform: rotate(8deg); box-shadow: 0 0 16px #a23bffaa, inset 0 0 10px #2a0a44; animation: warp 1.6s infinite alternate ease-in-out; }
+  .husk .eye { position: absolute; inset: 34%; background: #ffd2ff; border-radius: 50%; box-shadow: 0 0 8px #fff, 0 0 16px #d24bff; animation: blinkpulse 1.2s infinite alternate; }
+  @keyframes warp { from { border-radius: 14% 60% 18% 55%; transform: rotate(6deg) scale(1); } to { border-radius: 55% 18% 60% 14%; transform: rotate(-6deg) scale(1.05); } }
+  @keyframes blinkpulse { from { opacity: .7; } to { opacity: 1; } }
+  .occ.hit { animation: shake .3s; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+  /* hp bars */
+  .hpbar { position: absolute; top: 2px; left: 10%; width: 80%; height: 5px; background: #000a; border: 1px solid #00000088; z-index: 6; }
+  .hpbar > i { display: block; height: 100%; background: linear-gradient(#6dff9b, #2fae5f); transition: width .25s; }
+  .husk-wrap .hpbar > i { background: linear-gradient(#ff7ad2, #b12f8f); }
+  /* side panel */
+  .panel { width: 280px; display: flex; flex-direction: column; gap: 14px; }
+  .stat { display: flex; justify-content: space-between; font-size: 12px; }
+  .stat b { color: #fff; }
+  .keys { display: flex; flex-direction: column; gap: 8px; }
+  .key { text-align: left; background: #161a2e; border: 1px solid #2c3252; color: #cdd3e0; padding: 9px 11px; border-radius: 6px; cursor: pointer; font-family: inherit; }
+  .key:hover:not(:disabled) { background: #1e2440; border-color: #4a557e; }
+  .key:disabled { opacity: .4; cursor: default; }
+  .key .kn { font-size: 12px; font-weight: 700; color: #7ecfff; letter-spacing: 1px; }
+  .key .kd { font-size: 10px; color: #8a90a8; margin-top: 2px; line-height: 1.35; }
+  .key.scald .kn { color: #ff9b5a; } .key.claim .kn { color: #5fe0c8; } .key.detonate .kn { color: #ffd34a; }
+  .actions { display: flex; gap: 8px; }
+  button.ctl { flex: 1; background: #1d2340; border: 1px solid #39406a; color: #cdd3e0; padding: 9px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 12px; }
+  button.ctl:hover { background: #262e52; }
+  button.ctl.end { background: #2a2150; border-color: #5a4a9e; color: #d8c8ff; }
+  .turnflag { font-size: 11px; color: #6a7088; }
+  .turnflag b { color: #9bffb0; }
+  #log { height: 210px; overflow-y: auto; background: #07070f; border: 1px solid #23263e; border-radius: 6px; padding: 8px; font-size: 11px; line-height: 1.5; display: flex; flex-direction: column-reverse; }
+  #log .l { color: #aab; } #log .h { color: #ffcf8a; } #log .g { color: #7ecfff; } #log .b { color: #ff8aa8; }
+  .banner { font-size: 16px; letter-spacing: 2px; text-transform: uppercase; padding: 8px; text-align: center; border-radius: 6px; display: none; }
+  .banner.win { display:block; background:#143a24; color:#9bffb0; } .banner.lose { display:block; background:#3a1420; color:#ff8aa8; }
+  .legend { font-size: 10px; color: #5a6080; display: flex; gap: 12px; flex-wrap: wrap; }
+  .legend span::before { content:'■ '; }
+  .lg-p::before { color:#2a4a7a; } .lg-e::before { color:#5a2a7a; } .lg-c::before { color:#2f8f8f; } .lg-h::before { color:#ff7a18; }
+</style>
+</head>
+<body>
+<h1>Field Proto — Scald · Claim · Detonate</h1>
+<div class="sub">8×4 · turn-based · move 1 tile + play 1 Key · keys fire down your row (you face right →)</div>
+
+<div class="wrap">
+  <div>
+    <div id="board"><div class="midline"></div></div>
+    <div class="legend" style="margin-top:8px;">
+      <span class="lg-p">your tiles</span><span class="lg-e">corrupted</span><span class="lg-c">claimed</span><span class="lg-h">heated</span>
+    </div>
+  </div>
+  <div class="panel">
+    <div id="banner" class="banner"></div>
+    <div class="stat"><span>AGENT</span><b id="php">100 / 100</b></div>
+    <div class="stat"><span>HUSK</span><b id="hhp">80 / 80</b></div>
+    <div class="turnflag" id="turnflag"></div>
+    <div class="keys" id="keys"></div>
+    <div class="actions">
+      <button class="ctl end" id="endturn">End Turn ▸</button>
+      <button class="ctl" id="restart">Restart</button>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+const COLS = 8, ROWS = 4, T = 72;
+const board = document.getElementById('board');
+let grid, player, husk, phase, idleFrames = [], idleTick = 0;
+
+// ---- sprite preload (auto-detect frame count) ----
+function loadIdle() {
+  return new Promise(res => {
+    const arr = [];
+    const next = i => {
+      const img = new Image();
+      img.src = 'art/agent/idle-smooth/frame_' + String(i).padStart(2,'0') + '.png';
+      img.onload = () => { arr.push(img); next(i+1); };
+      img.onerror = () => res(arr);
+    };
+    next(0);
+  });
+}
+
+// ---- setup ----
+function newGame() {
+  grid = [];
+  for (let r = 0; r < ROWS; r++) {
+    grid[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      grid[r][c] = { owner: c < 4 ? 'player' : 'enemy', claimed: false, heat: 0 };
+    }
+  }
+  player = { c: 1, r: 1, hp: 100, max: 100, moved: false, keyed: false };
+  husk = { c: 6, r: 1, hp: 80, max: 80, slowed: false, alive: true };
+  phase = 'player';
+  document.getElementById('banner').className = 'banner';
+  document.getElementById('log').innerHTML = '';
+  log('h', 'Handler: Sector\'s hot. One husk on the board — push it back.');
+  buildBoard();
+  render();
+}
+
+// ---- board DOM ----
+let tileEls = [];
+function buildBoard() {
+  board.querySelectorAll('.tile, .occ').forEach(e => e.remove());
+  tileEls = [];
+  for (let r = 0; r < ROWS; r++) {
+    tileEls[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      const d = document.createElement('div');
+      d.className = 'tile';
+      d.style.left = (c*T) + 'px'; d.style.top = (r*T) + 'px';
+      d.dataset.c = c; d.dataset.r = r;
+      d.addEventListener('click', () => onTileClick(c, r));
+      board.appendChild(d);
+      tileEls[r][c] = d;
+    }
+  }
+  // player occupant
+  const pw = document.createElement('div');
+  pw.className = 'occ'; pw.id = 'player-wrap';
+  pw.innerHTML = '<div class="hpbar"><i id="php-bar"></i></div><img id="player-sprite">';
+  board.appendChild(pw);
+  // husk occupant
+  const hw = document.createElement('div');
+  hw.className = 'occ husk-wrap'; hw.id = 'husk-wrap';
+  hw.innerHTML = '<div class="hpbar"><i id="hhp-bar"></i></div><div class="husk"><div class="core"></div><div class="eye"></div></div>';
+  board.appendChild(hw);
+}
+
+// ---- render ----
+function reachable() {
+  if (player.moved || phase !== 'player') return [];
+  const out = [];
+  for (const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+    const c = player.c + dc, r = player.r + dr;
+    if (c<0||c>=COLS||r<0||r>=ROWS) continue;
+    const t = grid[r][c];
+    const mine = t.owner === 'player' || t.claimed;
+    const occupied = (husk.alive && husk.c===c && husk.r===r);
+    if (mine && !occupied) out.push([c,r]);
+  }
+  return out;
+}
+
+function render() {
+  const reach = reachable();
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+    const t = grid[r][c], el = tileEls[r][c];
+    let cls = 'tile ' + (t.claimed ? 'claimed' : t.owner);
+    if (t.heat>0) cls += ' heat';
+    if (reach.some(([rc,rr])=>rc===c&&rr===r)) cls += ' reachable';
+    el.className = cls;
+    el.innerHTML = t.heat>0 ? '<span class="heatnum">'+t.heat+'</span>' : '';
+  }
+  // occupants
+  const pw = document.getElementById('player-wrap');
+  pw.style.left = (player.c*T)+'px'; pw.style.top = (player.r*T)+'px';
+  const hw = document.getElementById('husk-wrap');
+  hw.style.display = husk.alive ? 'flex' : 'none';
+  hw.style.left = (husk.c*T)+'px'; hw.style.top = (husk.r*T)+'px';
+  document.getElementById('php-bar').style.width = (100*player.hp/player.max)+'%';
+  document.getElementById('hhp-bar').style.width = (100*husk.hp/husk.max)+'%';
+  document.getElementById('php').textContent = player.hp+' / '+player.max;
+  document.getElementById('hhp').textContent = Math.max(0,husk.hp)+' / '+husk.max;
+  // keys + turn flag
+  renderKeys();
+  document.getElementById('turnflag').innerHTML = phase==='player'
+    ? 'Your turn — move: <b>'+(player.moved?'used':'ready')+'</b> · key: <b>'+(player.keyed?'used':'ready')+'</b>'
+    : phase==='enemy' ? 'Husk acting…' : '';
+}
+
+const KEYS = [
+  { id:'scald', name:'SCALD', desc:'Heat the 2 tiles ahead of you. Enemy on heat takes 10 at start of its turn (2 turns).' },
+  { id:'claim', name:'CLAIM', desc:'Flip the nearest corrupted tile in your row to yours. Enemy stepping on it is slowed.' },
+  { id:'detonate', name:'DETONATE', desc:'Blow every heated tile at once: 20 burst to any enemy standing on one.' },
+];
+function renderKeys() {
+  const box = document.getElementById('keys');
+  box.innerHTML = '';
+  for (const k of KEYS) {
+    const b = document.createElement('button');
+    b.className = 'key '+k.id;
+    b.disabled = phase!=='player' || player.keyed;
+    b.innerHTML = '<div class="kn">'+k.name+'</div><div class="kd">'+k.desc+'</div>';
+    b.addEventListener('click', ()=>playKey(k.id));
+    box.appendChild(b);
+  }
+}
+
+// ---- player actions ----
+function onTileClick(c, r) {
+  if (phase!=='player' || player.moved) return;
+  if (!reachable().some(([rc,rr])=>rc===c&&rr===r)) return;
+  player.c = c; player.r = r; player.moved = true;
+  render();
+}
+
+function playKey(id) {
+  if (phase!=='player' || player.keyed) return;
+  if (id==='scald') {
+    let n=0;
+    for (const dc of [1,2]) { const c=player.c+dc; if (c<COLS){ grid[player.r][c].heat=2; n++; } }
+    log('g','You play SCALD — '+n+' tile(s) ahead go hot.');
+    log('h','Handler: Heat\'s laid. Make it walk through.');
+  } else if (id==='claim') {
+    let done=false;
+    for (let c=4;c<COLS;c++){ const t=grid[player.r][c]; if(!t.claimed){ t.claimed=true; t.owner='player'; log('g','You play CLAIM — column '+(c+1)+' is yours now.'); log('h','Handler: Tile\'s ours. It\'ll drag stepping on that.'); done=true; break; } }
+    if(!done) log('l','CLAIM — no corrupted tile left in this row.');
+  } else if (id==='detonate') {
+    let hit=false;
+    for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++){ if(grid[r][c].heat>0){ if(husk.alive&&husk.c===c&&husk.r===r){ husk.hp-=20; hit=true; } grid[r][c].heat=0; } }
+    if(hit){ log('g','You play DETONATE — 20 burst!'); log('h','Handler: Boom. That\'s how you cook a husk.'); flashHit('husk-wrap'); }
+    else { log('l','You play DETONATE — nothing standing on heat. Tiles cleared.'); }
+  }
+  player.keyed = true;
+  if (checkEnd()) { render(); return; }
+  render();
+}
+
+document.getElementById('endturn').addEventListener('click', ()=>{ if(phase==='player') enemyTurn(); });
+document.getElementById('restart').addEventListener('click', newGame);
+
+// ---- enemy AI ----
+function enemyTurn() {
+  phase='enemy'; render();
+  const steps = [];
+  // 1. heat damage
+  steps.push(()=>{ const t=grid[husk.r][husk.c]; if(t.heat>0){ husk.hp-=10; log('b','The husk sears on the hot tile. (-10)'); flashHit('husk-wrap'); } });
+  // 2. move (unless slowed)
+  steps.push(()=>{
+    if(!husk.alive) return;
+    if(husk.slowed){ husk.slowed=false; log('l','The husk is bogged down — it can\'t advance.'); return; }
+    let nc=husk.c, nr=husk.r;
+    if(husk.r!==player.r) nr += Math.sign(player.r-husk.r);
+    else if(husk.c>player.c) nc -= 1;
+    if((nc!==husk.c||nr!==husk.r) && !(nc===player.c&&nr===player.r)){
+      husk.c=nc; husk.r=nr;
+      if(grid[nr][nc].claimed){ husk.slowed=true; log('l','The husk drags onto your tile. (slowed next turn)'); }
+    }
+  });
+  // 3. attack if adjacent same row
+  steps.push(()=>{
+    if(!husk.alive) return;
+    if(husk.r===player.r && Math.abs(husk.c-player.c)===1){ player.hp-=12; log('b','The husk lashes you! (-12)'); flashHit('player-wrap'); }
+  });
+  // run with delays
+  let i=0;
+  const run=()=>{
+    if(i<steps.length){ steps[i++](); render(); if(checkEnd()) return; setTimeout(run, 420); }
+    else { endRound(); }
+  };
+  setTimeout(run, 300);
+}
+
+function endRound() {
+  // tick heat down
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){ if(grid[r][c].heat>0) grid[r][c].heat--; }
+  player.moved=false; player.keyed=false;
+  phase='player';
+  if(checkEnd()) return;
+  render();
+}
+
+function checkEnd() {
+  if(husk.hp<=0 && husk.alive){ husk.alive=false; phase='won'; banner('win','SECTOR CLEARED'); log('h','Handler: Sector clear. Good work, agent.'); render(); return true; }
+  if(player.hp<=0){ phase='lost'; banner('lose','AGENT DOWN'); log('h','Handler: Agent down… pulling you out. (run lost)'); render(); return true; }
+  return false;
+}
+
+// ---- helpers ----
+function banner(kind, txt){ const b=document.getElementById('banner'); b.className='banner '+kind; b.textContent=txt; }
+function flashHit(id){ const e=document.getElementById(id); e.classList.add('hit'); setTimeout(()=>e.classList.remove('hit'),300); }
+function log(cls, msg){ const l=document.getElementById('log'); const d=document.createElement('div'); d.className='l '+cls; d.textContent=msg; l.prepend(d); }
+
+// ---- idle animation ----
+function animate(){ if(idleFrames.length){ idleTick=(idleTick+1)%idleFrames.length; const s=document.getElementById('player-sprite'); if(s) s.src=idleFrames[idleTick].src; } setTimeout(animate, 110); }
+
+// ---- boot ----
+loadIdle().then(f=>{ idleFrames=f; newGame(); animate(); });
+</script>
+</body>
+</html>
