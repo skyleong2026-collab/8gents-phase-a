@@ -1,0 +1,73 @@
+# PENDING — apply from a build-instance session (SeamLab.jsx is not art-instance-owned)
+#
+# Art instance generated 17 painterly portraits (public/art/creatures/<id>/portrait/portrait.png)
+# and 8 carved-stone lore images (public/art/stones/<ring-id>.png), verified working via a local
+# preview (lint/build/test green, live Playwright-style check clean, no console errors). This
+# patch wires them into SeamLab.jsx's CharacterSheet (portrait) and Chronicle/stone-reveal beat
+# (stone images). Apply with:
+#   cd ~/8gents && git apply scripts/pixellab/PENDING-SeamLab-portrait-stone-wiring.patch
+# Then re-run npx eslint / npm run build / npm test / a live check before committing (build-
+# instance owns SeamLab.jsx, not this session). Safe to delete this file after applying.
+
+diff --git a/src/screens/SeamLab.jsx b/src/screens/SeamLab.jsx
+index 5b930f7..d2c6bbc 100644
+--- a/src/screens/SeamLab.jsx
++++ b/src/screens/SeamLab.jsx
+@@ -55,7 +55,7 @@ import { DEEP_INSCRIPTIONS, loadStones, saveStones } from '../data/lore.js';
+ import { ACCENT, CHG, BURN, AMP, WIN, LOSS, DIM, PANEL, LINE, SEL, TYPE_SCALE as T, FONTS, BASE } from '../data/designTokens.js';
+ import { StatusChip, RelicCard } from '../components/ui/index.jsx';
+ import { FramePlayer } from '../components/FramePlayer.jsx';
+-import { hasCreatureAnim } from '../data/creatureAnim.js';
++import { hasCreatureAnim, hasPortrait, portraitSrc } from '../data/creatureAnim.js';
+ const PATCHUP = 0.18; // between-wave heal (fraction of max HP) — small, so a run is a war of attrition
+ // Input-locking beat after each action — the hit animates, THEN the next actor is
+ // asked. Weighted by move size for a Summoners-War-style feel (~1.2–1.9s/turn): a
+@@ -2768,8 +2768,12 @@ function CharacterSheet({ id, swornNodeId, coresBal = 0, hasTree = false, narrow
+ 
+       {/* Identity header — big art, name, rarity, Type, role */}
+       <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 16 }}>
+-        <div style={{ flexShrink: 0, background: `radial-gradient(circle at 50% 40%, ${ti.accent}22, #0c0c14)`, borderRadius: 14, border: `1px solid ${ti.accent}44`, padding: 6 }}>
+-          <Sprite spriteId={c.spriteId} color={ti.accent} glyph={ti.glyph} anim="idle" size={narrow ? 88 : 116} />
++        <div style={{ flexShrink: 0, background: `radial-gradient(circle at 50% 40%, ${ti.accent}22, #0c0c14)`, borderRadius: 14, border: `1px solid ${ti.accent}44`, padding: 6, width: narrow ? 88 : 116, height: narrow ? 88 : 116, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
++          {hasPortrait(c.spriteId) ? (
++            <img src={portraitSrc(c.spriteId)} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
++          ) : (
++            <Sprite spriteId={c.spriteId} color={ti.accent} glyph={ti.glyph} anim="idle" size={narrow ? 88 : 116} />
++          )}
+         </div>
+         <div style={{ flex: 1, minWidth: 0 }}>
+           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+@@ -3941,6 +3945,16 @@ function RunMode({ narrow, slag = 0, onSlag }) {
+         <div style={{ fontSize: T.micro, color: unlocked ? '#b0a8c4' : '#454056', lineHeight: 1.6, fontStyle: 'italic', marginTop: 4 }}>{unlocked ? text : 'Not yet reached on the climb.'}</div>
+       </div>
+     );
++    // Stone entries add a small thumbnail (art instance, PixelLab) beside the title when found.
++    const cStoneEntry = (key, ringId, title, text, unlocked) => (
++      <div key={key} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', borderRadius: 10, padding: '10px 12px', marginBottom: 8, background: unlocked ? '#0e0b16' : '#0a0a0e', border: `1px solid ${unlocked ? '#2a2438' : LINE}`, opacity: unlocked ? 1 : 0.5 }}>
++        {unlocked && <img src={`/art/stones/${ringId}.png`} alt={title} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, border: '1px solid #2a2438', flexShrink: 0 }} />}
++        <div style={{ minWidth: 0 }}>
++          <div style={{ fontSize: T.small, fontWeight: 900, color: unlocked ? '#d8cfe6' : '#54506a' }}>{unlocked ? title : '? ? ?'}</div>
++          <div style={{ fontSize: T.micro, color: unlocked ? '#b0a8c4' : '#454056', lineHeight: 1.6, fontStyle: 'italic', marginTop: 4 }}>{unlocked ? text : 'Not yet reached on the climb.'}</div>
++        </div>
++      </div>
++    );
+     const cHead = (txt) => <div style={{ fontSize: T.small, fontWeight: 900, color: '#cba6ff', letterSpacing: 1.5, margin: '18px 0 8px' }}>{txt}</div>;
+     const dropText = 'You walk the last ring to its end, and the Drop opens — not a pit but a doorway, light spilling up out of the dark. Your mentor stood exactly here. Went in. You understand it now: he was never lost. He was the first one through. Three cores hum at your chest. Seventy-five years of blight — and the answer to all of it is one step away. You take it.';
+     // count discovered
+@@ -3962,7 +3976,7 @@ function RunMode({ narrow, slag = 0, onSlag }) {
+         </div>
+         {cHead('THE CARVED STONES — the deep past')}
+         {HUNTING_GROUNDS.map((g) => DEEP_INSCRIPTIONS[g.id] &&
+-          cEntry('st' + g.id, DEEP_INSCRIPTIONS[g.id].title + ' · ' + g.name, DEEP_INSCRIPTIONS[g.id].text, stones.includes(g.id))
++          cStoneEntry('st' + g.id, g.id, DEEP_INSCRIPTIONS[g.id].title + ' · ' + g.name, DEEP_INSCRIPTIONS[g.id].text, stones.includes(g.id))
+         )}
+         {cHead('THE OPENING')}
+         {OPENING_SCENES.map((s, i) => cEntry('op' + i, s.title, s.text, true))}
+@@ -5502,6 +5516,7 @@ function RunMode({ narrow, slag = 0, onSlag }) {
+ 
+           {step === 'stone' && stoneNow && (
+             <div style={{ ...calm, background: 'rgba(16,15,13,0.9)', border: '1px solid #3a362c' }}>
++              <img src={`/art/stones/${stoneNow.ringId}.png`} alt={stoneNow.title} style={{ display: 'block', width: '100%', maxWidth: 220, margin: '0 auto 10px', borderRadius: 8, border: '1px solid #3a362c' }} />
+               <div style={{ fontSize: T.micro, fontWeight: 900, letterSpacing: 1.5, color: '#b8ab8a' }}>🪨 A CARVED STONE — {stoneNow.title}</div>
+               <div style={{ fontSize: T.small, color: '#cfc6ae', lineHeight: 1.7, fontStyle: 'italic', margin: '8px 0 6px' }}>{stoneNow.text}</div>
+               <div style={{ fontSize: T.micro, color: '#8a8068', fontStyle: 'italic' }}>Old words. Heavy, though. — kept in ❖ The Chronicle (🏚 Home → Chronicles, {stones.length}/8 stones)</div>

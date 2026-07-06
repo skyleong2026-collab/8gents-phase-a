@@ -17,3 +17,16 @@ export const CREATURE_ANIM = {
 };
 
 export const hasCreatureAnim = (id) => !!CREATURE_ANIM[id];
+
+// ── Character-sheet portraits (art instance, PixelLab painterly-preserving pipeline) ──
+// Bust-framed identity art per creature, generated from each creature's locked battle
+// sprite via animate-with-text-v3 (style-preserving, not a pixel-art redraw — matches
+// THE FORK's committed painterly look for public/sprites/*.jpg). One static PNG per
+// creature at <base>/portrait/portrait.png. Falls back to the battle Sprite if absent.
+export const PORTRAIT_IDS = [
+  'cinderpaw', 'fizzpop', 'glowtail', 'stoneward', 'ironwall', 'mossback', 'dewleaf',
+  'buzzline', 'tanglewing', 'swiftpaw', 'dartwing', 'shadefang', 'veilclaw',
+  'frostwarden', 'rimecaller', 'blightcap', 'hexmoth',
+];
+export const hasPortrait = (id) => PORTRAIT_IDS.includes(id);
+export const portraitSrc = (id) => `/art/creatures/${id}/portrait/portrait.png`;
