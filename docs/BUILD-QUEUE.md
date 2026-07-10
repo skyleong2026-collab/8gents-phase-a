@@ -119,6 +119,19 @@ STOP. Specs live in `docs/RINGWARD-COLLECTION-DESIGN.md` unless noted.
 - [x] **R4 · MODEL=sonnet · Law recipe-pointers + recipe feats** — LAW_RECIPE map in waves.js (7 laws → roster recipes with folk-honest hints); RingLawChip 'detail' variant now shows ↳ icon NAME — hint; Cook the Book feat group (Bronze/Silver/Gold) in feats.js; recipesCooked persisted at boss-clear, added to featSnapshot. Goldens byte-identical, lint/build/Playwright clean, zero page errors.
 
 NOT in this queue (needs Sky or attended judgment): canon copy table (RINGWARD-COPY-AUDIT.md,
-awaiting his checkmarks), per-creature attack-VFX signature table (Fable+Sky pass), portrait
-art (art instance + PixelLab budget), R5 creature-18+/Apex recipe authoring (Fable), PixelLab
-8-stone batch, carrier/R3 re-tuning (gated on Sky's playtest), audio.
+awaiting his checkmarks), per-creature attack-VFX signature table (Fable+Sky pass),
+R5 creature-18+/Apex recipe authoring (Fable), carrier/R3 re-tuning (gated on Sky's playtest),
+audio.
+
+- [x] **Portrait art (art instance)** — DONE (commit f5dfab5). 17/17 roster portraits at
+  `public/art/creatures/<id>/portrait/portrait.png`, generated via `animate-with-text-v3` using
+  each creature's committed `public/sprites/<id>.jpg` as `first_frame` (style-preserving —
+  matches THE FORK's shipped painterly look, no pixel-art redraw). `creatureAnim.js` gained
+  `hasPortrait`/`portraitSrc`. The CharacterSheet wiring itself is a PENDING patch (SeamLab.jsx
+  isn't art-instance-owned) — see `scripts/pixellab/PENDING-SeamLab-portrait-stone-wiring.patch`.
+- [x] **PixelLab 8-stone batch (art instance)** — DONE (commit f5dfab5). "8 stones" = the 8
+  carved lore tablets in `src/data/lore.js` `DEEP_INSCRIPTIONS` (one per ring, found on first
+  clear) — not relic/keystone icons (those already have full art). Images at
+  `public/art/stones/<ring-id>.png` via `create-image-pixflux`, each ring's own environment art
+  as a low-strength (~40-150) init_image so the new stone composition keeps that ring's palette
+  without duplicating the environment shot. Chronicle/won-screen wiring is the same PENDING patch.
