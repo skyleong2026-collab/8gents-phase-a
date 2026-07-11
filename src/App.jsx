@@ -9,6 +9,7 @@ import FeedModal from './screens/FeedModal.jsx';
 import Result from './screens/Result.jsx';
 import DungeonScreen from './screens/DungeonScreen.jsx';
 import DungeonResult from './screens/DungeonResult.jsx';
+import LabScreen from './screens/LabScreen.jsx';
 import { battle } from './engine/battle.js';
 import { randomSeed } from './engine/rng.js';
 import { buildStartingCollection } from './data/startingCollection.js';
@@ -19,7 +20,7 @@ import { getLevel } from './engine/progression.js';
 import { XP_PER_FEED } from './engine/progression.js';
 import { animationStyles } from './ui/animations.js';
 
-const VERSION = 'vI-A';
+const VERSION = 'vJ-A';
 
 // Migrate stale archetype names from pre-vG-A builds
 const ARCHETYPE_MIGRATION = { Anchor: 'Guardian', Relay: 'Echo', Predator: 'Swift', Ember: 'Spark' };
@@ -487,10 +488,14 @@ function App() {
             onEncounters={() => setScreen('encounters')}
             onWalk={() => setScreen('world')}
             onDungeon={() => setScreen('dungeon')}
+            onLab={() => setScreen('lab')}
             justFedInstanceId={justFedInstanceId}
             onEquipCore={equipCore}
             onEquipModule={equipModule}
           />
+        )}
+        {screen === 'lab' && (
+          <LabScreen onBack={() => setScreen('collection')} />
         )}
         {screen === 'encounters' && (
           <EncounterScreen

@@ -347,7 +347,7 @@ function hasSameSpeciesToFeed(unit, collection, squadIds) {
   );
 }
 
-export default function CollectionScreen({ collection, squadIds, onToggleSquad, onFeed, onEncounters, onWalk, onDungeon, justFedInstanceId, onEquipCore, onEquipModule }) {
+export default function CollectionScreen({ collection, squadIds, onToggleSquad, onFeed, onEncounters, onWalk, onDungeon, onLab, justFedInstanceId, onEquipCore, onEquipModule }) {
   const [coreModalUnit, setCoreModalUnit] = useState(null);
   const [moduleModalUnit, setModuleModalUnit] = useState(null);
   const activeSquad = collection.filter((u) => squadIds.includes(u.instanceId));
@@ -363,6 +363,23 @@ export default function CollectionScreen({ collection, squadIds, onToggleSquad, 
           SQUAD — {squadIds.length}/8
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={onLab}
+            style={{
+              padding: '9px 14px',
+              background: 'none',
+              border: '1px solid #5a4a2a',
+              borderRadius: 7,
+              color: '#b08a3a',
+              fontSize: 11,
+              fontWeight: 900,
+              letterSpacing: 1.5,
+              cursor: 'pointer',
+              textTransform: 'uppercase',
+            }}
+          >
+            ⚗ Lab
+          </button>
           <button
             onClick={onWalk}
             style={{
